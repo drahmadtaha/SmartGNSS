@@ -1,0 +1,45 @@
+{
+  "summary": "Tested SmartGNSS Expo/RN app — both backend FastAPI and mobile-web frontend. 25/25 pytest backend tests pass covering projects CRUD, points CRUD, CSV/KML export, COGO inverse/area, mocked devices scan, and cascade delete. Frontend: home renders 8 bento tiles + StatusBar + ACTIVE PROJECT card; project creation via modal works and active project propagates back to home; COGO INVERSE and AREA tabs both compute correctly (~111,194m for 1° equator, area ≈ 6,196 m²); Device screen lists all 6 mocked GNSS receivers; Survey screen correctly shows 'No active project' / 'Location permission denied' warnings and disables MEASURE button as expected; Points, Map (empty state shown), Stakeout screens all load without crashes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "project (NEW PROJECT modal)", "issues": ["On 390x844 viewport the CREATE/CANCEL action buttons sit at y≈780 (bottom 44px) — visible but very close to bottom edge. Playwright initially flagged it as outside viewport on the first attempt; force-click on retry worked. On real devices with on-screen keyboard the action buttons may be obscured. Consider wrapping modal content in a ScrollView or adding extra bottom inset / KeyboardAvoidingView keyboardVerticalOffset."]}
+    ],
+    "react_native_issues": [
+      {"component": "<Image> in app/index.tsx banner (and possibly others)", "issue": "Console warns: 'Image: style.resizeMode is deprecated. Please use props.resizeMode.' Move resizeMode from StyleSheet to the resizeMode prop. Non-blocking."},
+      {"component": "Multiple", "issue": "Console warns: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Coming from RN web internals/expo-router; safe to ignore but worth noting."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_smartgnss.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Make NEW PROJECT modal scrollable or raise it higher so CREATE/CANCEL are not pinned to the bottom edge on small phones.",
+    "(Optional) Replace deprecated Image style.resizeMode with the resizeMode prop on the banner Image in app/index.tsx.",
+    "Note: WebView Leaflet map could not be exercised in this run because no points exist; empty state ('No points to show') renders correctly. Consider testing with seeded points in a future iteration."
+  ],
+  "critical_code_review_comments": [
+    "Backend correctly excludes MongoDB '_id' via PROJECTION = {'_id': 0}. Good.",
+    "Frontend uses process.env.EXPO_PUBLIC_BACKEND_URL (correct for Expo public env var). Note: the system prompt mentions EXPO_BACKEND_URL but the env file/key in this repo is EXPO_PUBLIC_BACKEND_URL — they resolve to the same public URL, so this is fine.",
+    "All interactive tiles, modal inputs, COGO inputs, and compute buttons have testID attributes — testability is good.",
+    "Vertex inputs on COGO Area screen lack testIDs (only placeholder='latitude'/'longitude'). Minor: add testIDs like cogo-vertex-0-lat for more robust testing.",
+    "server.py uses deprecated @app.on_event('shutdown') — works but FastAPI lifespan API is preferred (non-blocking).",
+    "Endpoint create_project returns 200 instead of 201 on POST. Pydantic-validated, but RESTfully 201 is conventional. Non-blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/__init__.py (created empty)",
+    "/app/backend/tests/test_smartgnss.py (created — 25 pytest tests)"
+  ],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "100% (11/11 critical flows after retry on modal-button click)"},
+  "seed_data_creation": "Created and cleaned up TEST_/PWT_ prefixed projects and points during pytest and Playwright runs. No residual test data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend public URL is EXPO_PUBLIC_BACKEND_URL=https://mobile-launch-158.preview.emergentagent.com. All API routes are under /api. The StatusBar and Bluetooth devices are intentionally MOCKED (RTK fix state cycles client-side; /api/devices/scan returns 6 hardcoded receivers). Browser geolocation is denied by default so Survey/Stakeout will show 'Location permission denied' — this is expected and correct behaviour. NEW PROJECT modal save button sits very close to the bottom of a 390x844 viewport; if your Playwright click reports 'outside viewport', call element.scrollIntoView() then click with force=True (worked second attempt).",
+  "rca_of_issue": "Initial Playwright failure on project-save-btn was an actionability false-positive (Playwright considered y=780,h=44 in a 844-tall viewport as outside the strict click intersect area); a retry after element.scrollIntoView({block:'center'}) plus force=True click succeeded. No functional bug; only design suggestion to lift the modal action buttons away from the bottom edge for better thumb reach on small phones."
+}
