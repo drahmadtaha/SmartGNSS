@@ -1,0 +1,140 @@
+{
+  "theme": "Light",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "rationale": "For an outdoor professional surveying app like SmartGNSS, direct sunlight readability is critical. We use extreme high-contrast (Swiss style), large bold touch targets, and mono fonts for coordinate data. The interface must prioritize function, scanability, and precision over decorative elements.",
+  "typography": {
+    "fonts": {
+      "headings": "Chivo",
+      "body": "IBM Plex Sans",
+      "mono": "IBM Plex Mono"
+    },
+    "hierarchy": {
+      "h1": "text-3xl font-black tracking-tight",
+      "h2": "text-2xl font-bold tracking-tight",
+      "h3": "text-xl font-bold tracking-tight",
+      "h4": "text-lg font-semibold",
+      "body": "text-base font-normal leading-snug",
+      "small_label": "text-xs font-bold uppercase tracking-widest",
+      "coordinates": "text-lg font-mono font-medium tracking-tight"
+    }
+  },
+  "colors": {
+    "background": {
+      "default": "#FFFFFF",
+      "surface": "#F5F5F5",
+      "surface_alt": "#E5E5E5"
+    },
+    "text": {
+      "primary": "#0A0A0A",
+      "secondary": "#4A4A4A",
+      "disabled": "#A0A0A0",
+      "inverse": "#FFFFFF"
+    },
+    "border": {
+      "default": "#D4D4D4",
+      "focus": "#0056D2"
+    },
+    "brand": {
+      "primary": "#0056D2",
+      "primary_hover": "#0043A4"
+    },
+    "status": {
+      "fixed": "#00A651",
+      "float": "#F5A623",
+      "single": "#D0021B",
+      "info": "#0056D2"
+    }
+  },
+  "spacing_and_layout": {
+    "touch_targets": "Minimum 48px (h-12 or p-4) for gloved fingers",
+    "container_padding": "p-4 md:p-6",
+    "grid_gap": "gap-4",
+    "border_radius": "rounded-md (subtle, crisp 6px radius for technical feel)",
+    "borders": "1px solid border-border (crisp grid lines to separate data clearly)"
+  },
+  "components": {
+    "status_bar": {
+      "type": "fixed_top",
+      "description": "Always visible top bar with tight layout.",
+      "content": "GNSS Fix Status (colored badge), Satellite count, Battery %, HRMS/VRMS accuracy in cm.",
+      "classes": "flex items-center justify-between p-2 bg-black text-white text-xs font-mono"
+    },
+    "home_dashboard": {
+      "layout": "Bento Grid / Tile Menu",
+      "classes": "grid grid-cols-2 gap-4 p-4",
+      "tiles": [
+        "Project (Folder icon)",
+        "Device (Bluetooth/Antenna icon)",
+        "Survey (Map marker icon)",
+        "Stakeout (Target/Compass icon)",
+        "COGO Tools (Calculator icon)",
+        "Settings (Gear icon)"
+      ],
+      "tile_style": "flex flex-col items-center justify-center p-6 bg-white border border-gray-300 rounded-md shadow-sm active:bg-gray-100"
+    },
+    "bottom_navigation": {
+      "classes": "fixed bottom-0 w-full flex justify-around items-center bg-white border-t border-gray-300 h-16 pb-safe",
+      "items": ["Project", "Survey", "Stakeout", "Device"]
+    },
+    "survey_screen": {
+      "layout": "Split map and data panel",
+      "map_area": "flex-1 relative bg-gray-100 border-b border-gray-300",
+      "data_panel": "p-4 bg-white space-y-4",
+      "coordinate_display": "grid grid-cols-2 gap-2 text-sm font-mono border border-gray-200 p-2 rounded bg-gray-50",
+      "action_button": "w-full bg-primary text-white h-16 text-xl font-bold rounded-md flex items-center justify-center active:scale-[0.98] transition-transform"
+    },
+    "stakeout_screen": {
+      "layout": "Target bullseye compass top, guidance metrics bottom",
+      "bullseye": "aspect-square w-full max-w-xs mx-auto rounded-full border-4 border-gray-200 flex items-center justify-center relative",
+      "metrics": "text-center space-y-2 font-mono text-3xl font-black text-primary"
+    },
+    "data_table": {
+      "description": "Dense points list with sticky header.",
+      "row_style": "flex border-b border-gray-200 p-2 text-sm font-mono items-center",
+      "header_style": "flex bg-gray-100 border-b-2 border-black p-2 text-xs font-bold uppercase tracking-wider"
+    }
+  },
+  "visual_enhancers": {
+    "shadows": "Minimal ambient shadows (shadow-sm). Rely on borders for definition.",
+    "textures": "None. Needs to be crisp and high contrast.",
+    "icons": "Phosphor Icons (Duotone or Bold) for high legibility."
+  },
+  "media": {
+    "image_urls": {
+      "survey_equipment": [
+        {
+          "url": "https://images.unsplash.com/photo-1628158088936-68ccaaa400dc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTB8MHwxfHNlYXJjaHwxfHxsYW5kJTIwc3VydmV5aW5nfGVufDB8fHx8MTc3ODc4ODI3Nnww&ixlib=rb-4.1.0&q=85",
+          "description": "Tripod on green grass field, useful for onboarding or empty states"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1682663810771-89d21838530f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTB8MHwxfHNlYXJjaHwzfHxsYW5kJTIwc3VydmV5aW5nfGVufDB8fHx8MTc3ODc4ODI3Nnww&ixlib=rb-4.1.0&q=85",
+          "description": "Tripod at construction site"
+        }
+      ],
+      "map_backgrounds": [
+        {
+          "url": "https://images.unsplash.com/photo-1461183479101-6c14cd5299c4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwyfHx0b3BvZ3JhcGh5JTIwbWFwfGVufDB8fHx8MTc3ODc4ODI3Nnww&ixlib=rb-4.1.0&q=85",
+          "description": "Topography map texture for project placeholder imagery"
+        }
+      ]
+    }
+  },
+  "testing_attributes": {
+    "required": true,
+    "pattern": "data-testid=\"[feature]-[element]-[role]\"",
+    "examples": [
+      "data-testid=\"survey-measure-button\"",
+      "data-testid=\"home-project-tile\"",
+      "data-testid=\"status-rtk-badge\""
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Build a mobile-first hybrid dashboard application focusing on outdoor readability.",
+    "Use standard HTML/Tailwind for the high-level layout, but build it like an app (fixed headers, bottom tabs, scrollable content areas).",
+    "Ensure all interactive elements have at least 48px height/width touch targets.",
+    "Mock the GNSS Status (Fixed/Float/Single) and update it periodically or via a toggle to demonstrate state changes.",
+    "Mock the Bluetooth device connection state.",
+    "Use Phosphor Icons to represent the primary tools.",
+    "Coordinate values must always use the IBM Plex Mono font."
+  ]
+}
