@@ -22,6 +22,8 @@ export default function RootLayout() {
         <Stack.Screen name="map" options={{ title: "MAP VIEW" }} />
         <Stack.Screen name="cogo" options={{ title: "COGO TOOLS" }} />
         <Stack.Screen name="device" options={{ title: "DEVICE" }} />
+        <Stack.Screen name="ntrip" options={{ title: "NTRIP / RTCM" }} />
+        <Stack.Screen name="cad" options={{ title: "CAD IMPORT" }} />
         <Stack.Screen name="settings" options={{ title: "SETTINGS" }} />
       </Stack>
     </SafeAreaProvider>

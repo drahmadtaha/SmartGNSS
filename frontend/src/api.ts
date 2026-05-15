@@ -78,4 +78,90 @@ export const api = {
   // Devices
   scanDevices: () =>
     request<{ devices: { id: string; name: string; type: string; rssi: number }[] }>("/devices/scan"),
+
+  // NTRIP
+  ntripSourcetable: (body: { host: string; port: number; username?: string; password?: string }) =>
+    request<{ caster: string; raw_lines: number; mountpoints: NtripMount[] }>("/ntrip/sourcetable", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  ntripConnect: (body: { host: string; port: number; mountpoint: string; username?: string; password?: string }) =>
+    request<{ session_id: string; status: string }>("/ntrip/connect", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  ntripStatus: (sessionId: string) => request<NtripSession>(`/ntrip/status/${sessionId}`),
+  ntripSessions: () => request<{ sessions: NtripSession[] }>("/ntrip/sessions"),
+  ntripDisconnect: (sessionId: string) =>
+    request<{ disconnected: boolean }>(`/ntrip/session/${sessionId}`, { method: "DELETE" }),
+
+  // CAD
+  uploadCad: async (
+    projectId: string,
+    file: { uri: string; name: string; mimeType?: string },
+    extras?: { dbf?: { uri: string; name: string }; shx?: { uri: string; name: string } }
+  ) => {
+    const form = new FormData();
+    form.append("project_id", projectId);
+    form.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType || "application/octet-stream",
+    } as any);
+    if (extras?.dbf) {
+      form.append("dbf", { uri: extras.dbf.uri, name: extras.dbf.name, type: "application/octet-stream" } as any);
+    }
+    if (extras?.shx) {
+      form.append("shx", { uri: extras.shx.uri, name: extras.shx.name, type: "application/octet-stream" } as any);
+    }
+    const res = await fetch(`${API}/cad/upload`, { method: "POST", body: form as any });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${t}`);
+    }
+    return res.json() as Promise<CadOverlay>;
+  },
+  listCad: (projectId: string) =>
+    request<CadOverlay[]>(`/cad?project_id=${encodeURIComponent(projectId)}`),
+  getCad: (overlayId: string) => request<CadOverlay>(`/cad/${overlayId}`),
+  deleteCad: (overlayId: string) =>
+    request<{ deleted: boolean }>(`/cad/${overlayId}`, { method: "DELETE" }),
+};
+
+export type NtripMount = {
+  mountpoint: string;
+  identifier: string;
+  format: string;
+  format_details: string;
+  carrier: string;
+  nav_system: string;
+  network: string;
+  country: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+export type NtripSession = {
+  id: string;
+  host: string;
+  port: number;
+  mountpoint: string;
+  username: string;
+  started_at: string;
+  bytes: number;
+  msg_types: Record<string, number>;
+  status: "connecting" | "streaming" | "disconnected" | "error";
+  last_rx: string | null;
+  error: string | null;
+};
+
+export type CadOverlay = {
+  id: string;
+  project_id: string;
+  filename: string;
+  file_type: "dxf" | "shp";
+  feature_count: number;
+  geojson: any;
+  bounds: [number, number, number, number] | null;
+  created_at: string;
 };

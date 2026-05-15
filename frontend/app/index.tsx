@@ -25,6 +25,8 @@ const TILES: Tile[] = [
   { key: "points", label: "Points", sub: "Coordinate DB", icon: "list", route: "/points", color: "#0A0A0A" },
   { key: "map", label: "Map", sub: "View on map", icon: "map", route: "/map", color: "#0056D2" },
   { key: "cogo", label: "COGO", sub: "Calculations", icon: "calculator", route: "/cogo", color: "#4A4A4A" },
+  { key: "ntrip", label: "NTRIP", sub: "RTCM stream", icon: "cloud-download", route: "/ntrip", color: "#0077C8" },
+  { key: "cad", label: "CAD", sub: "DXF / SHP", icon: "layers", route: "/cad", color: "#0A0A0A" },
   { key: "settings", label: "Settings", sub: "Configure", icon: "settings", route: "/settings", color: "#4A4A4A" },
 ];
 
