@@ -36,7 +36,7 @@ class BluetoothTransport(
     private var reader: Thread? = null
     @Volatile private var running = false
 
-    @SuppressLint("MissingPermission")
+    @get:SuppressLint("MissingPermission")
     override val description: String
         get() = "${device.name ?: "Bluetooth"} (${device.address})"
 
@@ -76,6 +76,7 @@ class BluetoothTransport(
     override suspend fun write(data: ByteArray) = withContext(Dispatchers.IO) {
         out?.write(data)
         out?.flush()
+        Unit
     }
 
     override fun close() {
