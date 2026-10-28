@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common USB-serial bridge chips used in GNSS data cables.
+         Add your instrument's own VID/PID here so the app auto-launches
+         when the cable is plugged in. -->
+    <!-- FTDI -->
+    <usb-device vendor-id="1027" />
+    <!-- Prolific PL2303 -->
+    <usb-device vendor-id="1659" />
+    <!-- Silicon Labs CP210x -->
+    <usb-device vendor-id="4292" />
+    <!-- CH340 / CH341 (WCH) -->
+    <usb-device vendor-id="6790" />
+</resources>
