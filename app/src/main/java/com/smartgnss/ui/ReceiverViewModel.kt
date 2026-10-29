@@ -70,16 +70,18 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Copy a picked geoid file into app storage, load (GTX/ISG), and persist it. */
-    fun loadGeoidFromUri(uri: android.net.Uri): String? = try {
-        val ctx = getApplication<android.app.Application>()
-        val name = (uri.lastPathSegment ?: "geoid.dat").substringAfterLast('/')
-        val dest = java.io.File(ctx.filesDir, "geoid_$name")
-        ctx.contentResolver.openInputStream(uri)?.use { inp ->
-            dest.outputStream().use { inp.copyTo(it) }
-        } ?: return "Cannot open file"
-        setGeoid(GeoidModel.Grid.loadAny(dest))
-        null
-    } catch (e: Exception) { e.message ?: "Load failed" }
+    fun loadGeoidFromUri(uri: android.net.Uri): String? {
+        return try {
+            val ctx = getApplication<android.app.Application>()
+            val name = (uri.lastPathSegment ?: "geoid.dat").substringAfterLast('/')
+            val dest = java.io.File(ctx.filesDir, "geoid_$name")
+            val input = ctx.contentResolver.openInputStream(uri)
+                ?: return "Cannot open file"
+            input.use { inp -> dest.outputStream().use { inp.copyTo(it) } }
+            setGeoid(GeoidModel.Grid.loadAny(dest))
+            null
+        } catch (e: Exception) { e.message ?: "Load failed" }
+    }
 
     private val _mountPoints = MutableStateFlow<List<MountPoint>>(emptyList())
     val mountPoints = _mountPoints.asStateFlow()
