@@ -68,6 +68,7 @@ import com.smartgnss.ui.screens.AreaScreen
 import com.smartgnss.ui.screens.CommunicationScreen
 import com.smartgnss.ui.screens.CoordinateSystemScreen
 import com.smartgnss.ui.screens.CorrectionsScreen
+import com.smartgnss.ui.screens.DataTerminalScreen
 import com.smartgnss.ui.screens.InverseScreen
 import com.smartgnss.ui.screens.ProjectsScreen
 import com.smartgnss.ui.screens.RoverScreen
@@ -213,6 +214,7 @@ private fun SubContent(vm: ReceiverViewModel, sub: Sub) {
         Sub.COMMUNICATION -> CommunicationScreen(vm)
         Sub.ROVER -> RoverScreen(vm)
         Sub.NTRIP -> CorrectionsScreen(vm)
+        Sub.DATA_TERMINAL -> DataTerminalScreen(vm)
         Sub.SATELLITES -> SkyPlotScreen(vm)
         Sub.GNSS_STATUS -> StatusScreen(vm)
         Sub.LICENSE -> ActivationScreen(vm, gate = false)

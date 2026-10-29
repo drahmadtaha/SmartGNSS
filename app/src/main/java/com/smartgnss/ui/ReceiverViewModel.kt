@@ -38,6 +38,17 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     private val _fix = MutableStateFlow(GnssFix())
     val fix = _fix.asStateFlow()
 
+    /** Rolling buffer of raw bytes received from the receiver, for diagnostics. */
+    private val _rawLog = MutableStateFlow("")
+    val rawLog = _rawLog.asStateFlow()
+    fun clearRawLog() { _rawLog.value = "" }
+    private fun appendRaw(bytes: ByteArray) {
+        val s = String(bytes, Charsets.ISO_8859_1)
+        val combined = _rawLog.value + s
+        _rawLog.value = if (combined.length > 6000)
+            combined.substring(combined.length - 6000) else combined
+    }
+
     private val _link = MutableStateFlow(LinkState.DISCONNECTED)
     val link = _link.asStateFlow()
 
@@ -143,6 +154,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
             launch {
                 t.incoming.collect { bytes ->
                     extractGga(bytes)
+                    appendRaw(bytes)
                     parser.feed(bytes).forEach { _fix.value = it }
                 }
             }
