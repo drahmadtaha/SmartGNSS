@@ -3,6 +3,8 @@ package com.smartgnss.ui.screens
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -16,10 +18,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -27,11 +31,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -42,6 +50,7 @@ import com.smartgnss.core.transport.LinkState
 import com.smartgnss.core.transport.TcpTransport
 import com.smartgnss.core.transport.UsbSerialTransport
 import com.smartgnss.ui.ReceiverViewModel
+import kotlinx.coroutines.delay
 
 private enum class ConnKind { BLUETOOTH, BLE, WIFI, USB }
 
@@ -54,7 +63,7 @@ fun CommunicationScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     val label by vm.linkLabel.collectAsState()
 
     var manufacturer by remember { mutableStateOf("Smart-GNSS") }
-    var kind by remember { mutableStateOf(ConnKind.BLUETOOTH) }
+    var kind by remember { mutableStateOf(ConnKind.BLE) }
     var refresh by remember { mutableStateOf(0) }
     var tcpHost by remember { mutableStateOf("") }
     var tcpPort by remember { mutableStateOf("9000") }
@@ -67,7 +76,6 @@ fun CommunicationScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // link status
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Status: ${link.name}", style = MaterialTheme.typography.titleMedium,
@@ -96,53 +104,22 @@ fun CommunicationScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 
         Field("Connection type")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(kind == ConnKind.BLUETOOTH, { kind = ConnKind.BLUETOOTH }, label = { Text("Bluetooth") })
             FilterChip(kind == ConnKind.BLE, { kind = ConnKind.BLE }, label = { Text("BLE") })
+            FilterChip(kind == ConnKind.BLUETOOTH, { kind = ConnKind.BLUETOOTH }, label = { Text("Bluetooth") })
             FilterChip(kind == ConnKind.WIFI, { kind = ConnKind.WIFI }, label = { Text("Wi-Fi") })
             FilterChip(kind == ConnKind.USB, { kind = ConnKind.USB }, label = { Text("USB") })
         }
 
-        OutlinedButton(onClick = { refresh++ }, modifier = Modifier.fillMaxWidth()) {
-            Text("Refresh devices")
+        if (!hasBtPerm(context) && (kind == ConnKind.BLE || kind == ConnKind.BLUETOOTH)) {
+            Text("Bluetooth permission is needed to scan and connect.",
+                style = MaterialTheme.typography.bodySmall)
+            Button(onClick = { permLauncher.launch(btPermissions()) },
+                modifier = Modifier.fillMaxWidth()) { Text("Grant Bluetooth permission") }
         }
 
         when (kind) {
-            ConnKind.BLUETOOTH, ConnKind.BLE -> {
-                if (!hasBtPerm(context)) {
-                    Text("Bluetooth permission is needed to list and connect to paired receivers.",
-                        style = MaterialTheme.typography.bodySmall)
-                    Button(
-                        onClick = { permLauncher.launch(btPermissions()) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Grant Bluetooth permission") }
-                } else {
-                    val bonded = remember(refresh) {
-                        val mgr = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-                        mgr.adapter?.bondedDevices?.toList().orEmpty()
-                    }
-                    Field("Paired devices")
-                    if (bonded.isEmpty()) {
-                        Text("No paired devices. Pair the receiver in Android settings first.",
-                            style = MaterialTheme.typography.bodySmall)
-                    } else bonded.forEach { dev ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Row(Modifier.padding(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(dev.name ?: "Unknown")
-                                    Text(dev.address, style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                Button(onClick = {
-                                    vm.connect(
-                                        if (kind == ConnKind.BLE) BleTransport(context, dev)
-                                        else BluetoothTransport(dev)
-                                    )
-                                }) { Text("Connect") }
-                            }
-                        }
-                    }
-                }
-            }
+            ConnKind.BLE -> BleSection(vm, context) { permLauncher.launch(btPermissions()) }
+            ConnKind.BLUETOOTH -> ClassicSection(vm, context, refresh) { refresh++ }
             ConnKind.WIFI -> {
                 Field("Network address")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -160,17 +137,111 @@ fun CommunicationScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             ConnKind.USB -> {
                 val drivers = remember(refresh) { UsbSerialTransport.available(context) }
                 Field("USB devices")
+                OutlinedButton(onClick = { refresh++ }, modifier = Modifier.fillMaxWidth()) { Text("Refresh") }
                 if (drivers.isEmpty()) {
-                    Text("No USB-serial device detected. Plug in the cable.",
-                        style = MaterialTheme.typography.bodySmall)
+                    Text("No USB-serial device detected.", style = MaterialTheme.typography.bodySmall)
                 } else drivers.forEach { drv ->
                     Card(Modifier.fillMaxWidth()) {
-                        Row(Modifier.padding(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(drv.device.productName ?: "USB serial", Modifier.weight(1f))
                             Button(onClick = { vm.connect(UsbSerialTransport(context, drv)) }) { Text("Connect") }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** BLE: live scan for nearby (unpaired) receivers, plus any already paired. */
+@SuppressLint("MissingPermission")
+@Composable
+private fun BleSection(vm: ReceiverViewModel, context: Context, requestPerm: () -> Unit) {
+    val adapter = remember {
+        (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
+    }
+    val found = remember { mutableStateListOf<android.bluetooth.BluetoothDevice>() }
+    var scanning by remember { mutableStateOf(false) }
+
+    val callback = remember {
+        object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: ScanResult) {
+                val dev = result.device ?: return
+                if (found.none { it.address == dev.address }) found.add(dev)
+            }
+        }
+    }
+
+    DisposableEffect(scanning) {
+        val scanner = adapter?.bluetoothLeScanner
+        if (scanning && scanner != null) runCatching { scanner.startScan(callback) }
+        onDispose { runCatching { scanner?.stopScan(callback) } }
+    }
+    LaunchedEffect(scanning) { if (scanning) { delay(12_000); scanning = false } }
+
+    Row(verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Button(
+            onClick = {
+                if (!hasScanPerm(context)) { requestPerm(); return@Button }
+                found.clear(); scanning = true
+            },
+            modifier = Modifier.weight(1f),
+        ) { Text(if (scanning) "Scanning…" else "Scan for BLE receivers") }
+        if (scanning) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+    }
+
+    // Paired BLE devices too (some receivers end up bonded).
+    val bonded = remember(scanning) {
+        adapter?.bondedDevices?.toList().orEmpty()
+    }
+    val all = (found + bonded).distinctBy { it.address }
+
+    if (all.isEmpty()) {
+        Text("Tap scan, then pick your receiver (e.g. ICEM10_BLE_…). BLE devices do not need pairing.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    } else {
+        Field("Found devices")
+        all.forEach { dev ->
+            Card(Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(dev.name ?: "(unnamed)")
+                        Text(dev.address, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Button(onClick = { scanning = false; vm.connect(BleTransport(context, dev)) }) {
+                        Text("Connect")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Classic Bluetooth (SPP): paired devices. */
+@SuppressLint("MissingPermission")
+@Composable
+private fun ClassicSection(vm: ReceiverViewModel, context: Context, refresh: Int, onRefresh: () -> Unit) {
+    OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) { Text("Refresh paired") }
+    val bonded = remember(refresh) {
+        val mgr = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        mgr.adapter?.bondedDevices?.toList().orEmpty()
+    }
+    Field("Paired devices")
+    if (bonded.isEmpty()) {
+        Text("No paired devices. Pair a classic-Bluetooth receiver in Android settings first.",
+            style = MaterialTheme.typography.bodySmall)
+    } else bonded.forEach { dev ->
+        Card(Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(dev.name ?: "Unknown")
+                    Text(dev.address, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Button(onClick = { vm.connect(BluetoothTransport(dev)) }) { Text("Connect") }
             }
         }
     }
@@ -188,8 +259,13 @@ private fun hasBtPerm(context: Context): Boolean {
     return ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
 }
 
-/** Runtime Bluetooth permissions to request (Android 12+ only needs these). */
+private fun hasScanPerm(context: Context): Boolean {
+    val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+        Manifest.permission.BLUETOOTH_SCAN else Manifest.permission.ACCESS_FINE_LOCATION
+    return ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
+}
+
 private fun btPermissions(): Array<String> =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
         arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
-    else arrayOf(Manifest.permission.BLUETOOTH)
+    else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
