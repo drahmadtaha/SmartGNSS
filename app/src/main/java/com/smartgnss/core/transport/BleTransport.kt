@@ -17,18 +17,18 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 /**
- * Bluetooth Low Energy link over the Nordic UART Service (NUS) — the profile
- * most BLE GNSS receivers expose. If your receiver uses different UUIDs, pass
- * them in. Uses the classic (pre-API-33) characteristic callbacks so it runs on
- * every supported Android version.
+ * Bluetooth Low Energy link that works with any BLE-serial GNSS receiver.
+ *
+ * It does not assume a fixed profile: after connecting it discovers the GATT
+ * services and auto-picks a NOTIFY characteristic (data coming from the
+ * receiver) and a WRITE characteristic (commands/RTCM going to it). It prefers
+ * the Nordic UART service when present, otherwise any service that exposes both
+ * a notify and a write characteristic (FFE0/FFE1, custom profiles, etc.).
  */
 @Suppress("DEPRECATION")
 class BleTransport(
     private val context: Context,
     private val device: BluetoothDevice,
-    private val serviceUuid: UUID = NUS_SERVICE,
-    private val writeUuid: UUID = NUS_RX,
-    private val notifyUuid: UUID = NUS_TX,
 ) : Transport {
 
     private val _state = MutableStateFlow(LinkState.DISCONNECTED)
@@ -39,6 +39,7 @@ class BleTransport(
 
     private var gatt: BluetoothGatt? = null
     private var writeChar: BluetoothGattCharacteristic? = null
+    private var notifyUuid: UUID? = null
     private var mtu = 20
     private val ready = CompletableDeferred<Unit>()
 
@@ -49,32 +50,36 @@ class BleTransport(
     private val callback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
-            if (newState == BluetoothProfile.STATE_CONNECTED) {
-                g.discoverServices()
-            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                _state.value = LinkState.DISCONNECTED
-                if (!ready.isCompleted) ready.completeExceptionally(IllegalStateException("BLE disconnected"))
+            when (newState) {
+                BluetoothProfile.STATE_CONNECTED -> g.discoverServices()
+                BluetoothProfile.STATE_DISCONNECTED -> {
+                    _state.value = LinkState.DISCONNECTED
+                    if (!ready.isCompleted)
+                        ready.completeExceptionally(IllegalStateException("BLE disconnected (status $status)"))
+                }
             }
         }
 
         @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-            val service = g.getService(serviceUuid)
-            if (service == null) {
-                if (!ready.isCompleted) ready.completeExceptionally(IllegalStateException("UART service not found"))
+            val (notify, write) = pickSerialCharacteristics(g)
+            if (notify == null || write == null) {
+                if (!ready.isCompleted)
+                    ready.completeExceptionally(IllegalStateException("No serial characteristics found"))
                 return
             }
-            writeChar = service.getCharacteristic(writeUuid)
-            val notifyChar = service.getCharacteristic(notifyUuid)
-            if (notifyChar == null) {
-                if (!ready.isCompleted) ready.completeExceptionally(IllegalStateException("Notify characteristic not found"))
-                return
+            writeChar = write
+            notifyUuid = notify.uuid
+            // Prefer write-without-response for serial streaming when available.
+            if (write.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0) {
+                write.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
             }
             g.requestMtu(185)
-            g.setCharacteristicNotification(notifyChar, true)
-            val cccd = notifyChar.getDescriptor(CCCD)
-            if (cccd != null) {
-                cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            g.setCharacteristicNotification(notify, true)
+            notify.getDescriptor(CCCD)?.let { cccd ->
+                val indicate = notify.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
+                cccd.value = if (indicate) BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+                else BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                 g.writeDescriptor(cccd)
             }
             _state.value = LinkState.CONNECTED
@@ -85,20 +90,42 @@ class BleTransport(
             if (newMtu > 0) mtu = newMtu
         }
 
-        // Pre-Android-13 callback.
         override fun onCharacteristicChanged(g: BluetoothGatt, ch: BluetoothGattCharacteristic) {
-            if (ch.uuid == notifyUuid) {
-                val value = ch.value ?: return
-                if (value.isNotEmpty()) _incoming.tryEmit(value.copyOf())
-            }
+            if (ch.uuid == notifyUuid) ch.value?.takeIf { it.isNotEmpty() }?.let { _incoming.tryEmit(it.copyOf()) }
         }
 
-        // Android 13+ callback (API 33) with the value delivered directly.
         override fun onCharacteristicChanged(
             g: BluetoothGatt, ch: BluetoothGattCharacteristic, value: ByteArray
         ) {
             if (ch.uuid == notifyUuid && value.isNotEmpty()) _incoming.tryEmit(value.copyOf())
         }
+    }
+
+    /** Find a (notify, write) characteristic pair across the GATT services. */
+    private fun pickSerialCharacteristics(
+        g: BluetoothGatt
+    ): Pair<BluetoothGattCharacteristic?, BluetoothGattCharacteristic?> {
+        fun isNotify(c: BluetoothGattCharacteristic) =
+            c.properties and (BluetoothGattCharacteristic.PROPERTY_NOTIFY or
+                BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0
+        fun isWrite(c: BluetoothGattCharacteristic) =
+            c.properties and (BluetoothGattCharacteristic.PROPERTY_WRITE or
+                BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0
+
+        // 1. Nordic UART, if present.
+        g.getService(NUS_SERVICE)?.let { s ->
+            val n = s.getCharacteristic(NUS_TX); val w = s.getCharacteristic(NUS_RX)
+            if (n != null && w != null) return n to w
+        }
+        // 2. A service that has both a notify and a write characteristic.
+        for (s in g.services) {
+            val n = s.characteristics.firstOrNull { isNotify(it) }
+            val w = s.characteristics.firstOrNull { isWrite(it) }
+            if (n != null && w != null) return n to w
+        }
+        // 3. Any notify + any write anywhere.
+        val allChars = g.services.flatMap { it.characteristics }
+        return allChars.firstOrNull { isNotify(it) } to allChars.firstOrNull { isWrite(it) }
     }
 
     @SuppressLint("MissingPermission")
