@@ -158,7 +158,7 @@ fun CommunicationScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 @Composable
 private fun BleSection(vm: ReceiverViewModel, context: Context, requestPerm: () -> Unit) {
     val adapter = remember {
-        (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
+        (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
     }
     val found = remember { mutableStateListOf<android.bluetooth.BluetoothDevice>() }
     var scanning by remember { mutableStateOf(false) }
@@ -174,8 +174,9 @@ private fun BleSection(vm: ReceiverViewModel, context: Context, requestPerm: () 
 
     DisposableEffect(scanning) {
         val scanner = adapter?.bluetoothLeScanner
-        if (scanning && scanner != null) runCatching { scanner.startScan(callback) }
-        onDispose { runCatching { scanner?.stopScan(callback) } }
+        if (scanning && scanner != null && hasScanPerm(context))
+            runCatching { scanner.startScan(callback) }
+        onDispose { runCatching { adapter?.bluetoothLeScanner?.stopScan(callback) } }
     }
     LaunchedEffect(scanning) { if (scanning) { delay(12_000); scanning = false } }
 
@@ -183,7 +184,7 @@ private fun BleSection(vm: ReceiverViewModel, context: Context, requestPerm: () 
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Button(
             onClick = {
-                if (!hasScanPerm(context)) { requestPerm(); return@Button }
+                if (!hasScanPerm(context) || !hasBtPerm(context)) { requestPerm(); return@Button }
                 found.clear(); scanning = true
             },
             modifier = Modifier.weight(1f),
@@ -191,9 +192,16 @@ private fun BleSection(vm: ReceiverViewModel, context: Context, requestPerm: () 
         if (scanning) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
     }
 
+    if (!hasBtPerm(context)) {
+        Text("Grant Bluetooth permission above, then scan.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+
     // Paired BLE devices too (some receivers end up bonded).
     val bonded = remember(scanning) {
-        adapter?.bondedDevices?.toList().orEmpty()
+        runCatching { adapter?.bondedDevices?.toList().orEmpty() }.getOrDefault(emptyList())
     }
     val all = (found + bonded).distinctBy { it.address }
 
@@ -204,10 +212,11 @@ private fun BleSection(vm: ReceiverViewModel, context: Context, requestPerm: () 
     } else {
         Field("Found devices")
         all.forEach { dev ->
+            val nm = runCatching { dev.name }.getOrNull() ?: "(unnamed)"
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(dev.name ?: "(unnamed)")
+                        Text(nm)
                         Text(dev.address, style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -225,9 +234,17 @@ private fun BleSection(vm: ReceiverViewModel, context: Context, requestPerm: () 
 @Composable
 private fun ClassicSection(vm: ReceiverViewModel, context: Context, refresh: Int, onRefresh: () -> Unit) {
     OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) { Text("Refresh paired") }
+    if (!hasBtPerm(context)) {
+        Text("Grant Bluetooth permission above to list paired devices.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
     val bonded = remember(refresh) {
-        val mgr = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        mgr.adapter?.bondedDevices?.toList().orEmpty()
+        runCatching {
+            val mgr = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+            mgr.adapter?.bondedDevices?.toList().orEmpty()
+        }.getOrDefault(emptyList())
     }
     Field("Paired devices")
     if (bonded.isEmpty()) {
@@ -237,7 +254,7 @@ private fun ClassicSection(vm: ReceiverViewModel, context: Context, refresh: Int
         Card(Modifier.fillMaxWidth()) {
             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(dev.name ?: "Unknown")
+                    Text(runCatching { dev.name }.getOrNull() ?: "Unknown")
                     Text(dev.address, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
