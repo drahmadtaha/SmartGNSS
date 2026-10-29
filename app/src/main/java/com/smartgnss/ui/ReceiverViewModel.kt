@@ -31,6 +31,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
 
     val license = LicenseManager(app)
     val survey = SurveyStore()
+    val projects = com.smartgnss.core.project.ProjectStore(app)
 
     private val parser = NmeaParser()
 

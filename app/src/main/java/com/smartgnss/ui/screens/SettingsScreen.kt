@@ -69,11 +69,11 @@ fun SettingsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                 CoordinateSystem.all.forEach { c ->
                     Row(
                         Modifier.fillMaxWidth()
-                            .selectable(selected = c === crs, onClick = { vm.setCrs(c) })
+                            .selectable(selected = c.name == crs.name, onClick = { vm.setCrs(c) })
                             .padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = c === crs, onClick = { vm.setCrs(c) })
+                        RadioButton(selected = c.name == crs.name, onClick = { vm.setCrs(c) })
                         Text(c.name, Modifier.padding(start = 8.dp))
                     }
                 }

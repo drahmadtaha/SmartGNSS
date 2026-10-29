@@ -65,9 +65,12 @@ import com.smartgnss.core.license.ActivationState
 import com.smartgnss.ui.ReceiverViewModel
 import com.smartgnss.ui.screens.ActivationScreen
 import com.smartgnss.ui.screens.AreaScreen
-import com.smartgnss.ui.screens.ConnectScreen
+import com.smartgnss.ui.screens.CommunicationScreen
+import com.smartgnss.ui.screens.CoordinateSystemScreen
 import com.smartgnss.ui.screens.CorrectionsScreen
 import com.smartgnss.ui.screens.InverseScreen
+import com.smartgnss.ui.screens.ProjectsScreen
+import com.smartgnss.ui.screens.RoverScreen
 import com.smartgnss.ui.screens.SettingsScreen
 import com.smartgnss.ui.screens.SkyPlotScreen
 import com.smartgnss.ui.screens.StakeoutScreen
@@ -201,11 +204,14 @@ private fun Shell(vm: ReceiverViewModel) {
 @Composable
 private fun SubContent(vm: ReceiverViewModel, sub: Sub) {
     when (sub) {
-        Sub.COORD_SYS -> SettingsScreen(vm)
+        Sub.PROJECTS -> ProjectsScreen(vm)
+        Sub.COORD_SYS -> CoordinateSystemScreen(vm)
+        Sub.SETTINGS -> SettingsScreen(vm)
         Sub.POINT_DB -> SurveyScreen(vm)
         Sub.POINT_SURVEY -> SurveyScreen(vm)
         Sub.POINT_STAKEOUT -> StakeoutScreen(vm)
-        Sub.COMMUNICATION -> ConnectScreen(vm)
+        Sub.COMMUNICATION -> CommunicationScreen(vm)
+        Sub.ROVER -> RoverScreen(vm)
         Sub.NTRIP -> CorrectionsScreen(vm)
         Sub.SATELLITES -> SkyPlotScreen(vm)
         Sub.GNSS_STATUS -> StatusScreen(vm)

@@ -145,7 +145,7 @@ fun SplashScreen() {
                     .background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(26.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(androidx.compose.material.icons.Icons.Filled.GpsFixed,
+                Icon(Icons.Filled.GpsFixed,
                     contentDescription = null, tint = Color.White,
                     modifier = Modifier.size(52.dp))
             }

@@ -1,77 +1,63 @@
 package com.smartgnss.core.geo
 
 /**
- * A full map projection the user can survey in: a [datum] plus a Transverse
- * Mercator grid. [toGrid] takes a WGS 84 position straight from the GNSS
- * receiver, applies the datum shift (if any), and returns grid East/North.
- *
- * Add your own belts here — one entry per published CRS.
+ * A runtime coordinate system built from an editable [CrsDefinition]. [toGrid]
+ * takes a WGS 84 position from the receiver, applies the datum transformation
+ * the definition selects, and projects to grid East/North.
  */
-class CoordinateSystem(
-    val name: String,
-    val datum: Datum,
-    private val lat0: Double,
-    private val lon0: Double,
-    private val k0: Double,
-    private val falseEast: Double,
-    private val falseNorth: Double,
-) {
+class CoordinateSystem(val def: CrsDefinition) {
+
+    val name: String get() = def.name
+
+    private val ellipsoid = Ellipsoid(def.ellipsoidName, def.a, def.invF)
+
     private val projection = TransverseMercator(
-        ellipsoid = datum.ellipsoid,
-        lat0 = lat0, lon0 = lon0, k0 = k0,
-        falseEast = falseEast, falseNorth = falseNorth,
+        ellipsoid = ellipsoid,
+        lat0 = def.lat0, lon0 = def.lon0, k0 = def.k0,
+        falseEast = def.falseEast, falseNorth = def.falseNorth,
     )
+
+    private fun effectiveDatum(): Datum = when (def.transform) {
+        TransformType.THREE_PARAM ->
+            Datum(def.name, ellipsoid, def.dx, def.dy, def.dz, 0.0, 0.0, 0.0, 0.0)
+        TransformType.BURSA_WOLF ->
+            Datum(def.name, ellipsoid, def.dx, def.dy, def.dz, def.rx, def.ry, def.rz, def.scalePpm)
+        TransformType.COORDINATE_FRAME ->
+            Datum(def.name, ellipsoid, def.dx, def.dy, def.dz, -def.rx, -def.ry, -def.rz, def.scalePpm)
+        TransformType.NONE ->
+            Datum(def.name, ellipsoid)
+    }
 
     /** WGS 84 lat/lon/ellipsoidal-height → grid East/North (metres). */
     fun toGrid(latWgs: Double, lonWgs: Double, hWgs: Double): Pair<Double, Double> {
-        val (lat, lon) = if (datum === Datum.WGS84) {
+        val (lat, lon) = if (def.transform == TransformType.NONE) {
             latWgs to lonWgs
         } else {
-            // WGS84 geodetic → WGS84 geocentric → local geocentric → local geodetic
             val wgsXyz = Datum.WGS84.geodeticToXyz(latWgs, lonWgs, hWgs)
-            val localXyz = datum.fromWgs84(wgsXyz)
-            val (la, lo, _) = datum.xyzToGeodetic(localXyz)
+            val local = effectiveDatum().fromWgs84(wgsXyz)
+            val (la, lo, _) = effectiveDatum().xyzToGeodetic(local)
             la to lo
         }
         return projection.forward(lat, lon)
     }
 
     companion object {
-        val UTM_36N = CoordinateSystem(
-            "UTM zone 36N (WGS84)", Datum.WGS84,
-            lat0 = 0.0, lon0 = 33.0, k0 = 0.9996,
-            falseEast = 500000.0, falseNorth = 0.0,
-        )
-        val UTM_37N = CoordinateSystem(
-            "UTM zone 37N (WGS84)", Datum.WGS84,
-            lat0 = 0.0, lon0 = 39.0, k0 = 0.9996,
-            falseEast = 500000.0, falseNorth = 0.0,
-        )
+        val UTM_36N = CoordinateSystem(CrsDefinition.UTM_36N)
+        val UTM_37N = CoordinateSystem(CrsDefinition.UTM_37N)
+        val PALESTINE_GRID = CoordinateSystem(CrsDefinition.PALESTINE_GRID)
+        val ISRAELI_TM = CoordinateSystem(CrsDefinition.ISRAELI_TM)
 
-        // Palestine Grid 1923 (EPSG:28193), Clarke 1880 / Palestine 1923 datum.
-        val PALESTINE_GRID = CoordinateSystem(
-            "Palestine Grid 1923", Datum.PALESTINE_1923,
-            lat0 = 31.73409694, lon0 = 35.21208055, k0 = 1.0,
-            falseEast = 170251.555, falseNorth = 1126867.909,
-        )
+        val all = CrsDefinition.templates.map { CoordinateSystem(it) }
 
-        // Israeli TM Grid (ITM, EPSG:2039), GRS80 / Israel 1993 datum.
-        val ISRAELI_TM = CoordinateSystem(
-            "Israeli TM Grid (ITM)", Datum.ISRAEL_1993,
-            lat0 = 31.734393611, lon0 = 35.204516944, k0 = 1.0000067,
-            falseEast = 219529.584, falseNorth = 626907.390,
-        )
-
-        val all = listOf(UTM_36N, UTM_37N, PALESTINE_GRID, ISRAELI_TM)
-
-        /** Pick the UTM zone that contains a longitude (northern hemisphere). */
         fun utmForLongitude(lonDeg: Double): CoordinateSystem {
             val zone = ((lonDeg + 180.0) / 6.0).toInt() + 1
-            val centralMeridian = zone * 6.0 - 183.0
+            val cm = zone * 6.0 - 183.0
             return CoordinateSystem(
-                "UTM zone ${zone}N (WGS84)", Datum.WGS84,
-                lat0 = 0.0, lon0 = centralMeridian, k0 = 0.9996,
-                falseEast = 500000.0, falseNorth = 0.0,
+                CrsDefinition(
+                    "UTM Zone ${zone}N (WGS84)", "WGS 84", 6378137.0, 298.257223563,
+                    TransformType.NONE, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, cm, 0.9996, 500000.0, 0.0, true,
+                )
             )
         }
     }
