@@ -31,6 +31,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GpsFixed
 import com.smartgnss.core.nmea.FixQuality
 import com.smartgnss.core.transport.LinkState
 import com.smartgnss.ui.ReceiverViewModel
