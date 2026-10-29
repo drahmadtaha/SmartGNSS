@@ -42,8 +42,19 @@ data class GnssFix(
     val pdop: Double? = null,
     val vdop: Double? = null,
     val speedKmh: Double? = null,
-    val headingDeg: Double? = null,
+    val headingDeg: Double? = null,   // dual-antenna heading (deg)
     val diffAgeSec: Double? = null,   // age of RTK corrections
     val baseStationId: String? = null,
     val satellitesInView: List<Satellite> = emptyList(),
-)
+    // Precision (from GST): horizontal / vertical RMS in metres.
+    val hrms: Double? = null,
+    val vrms: Double? = null,
+    // Tilt / attitude (UM982 IMU, from HPR/TRA): degrees.
+    val pitchDeg: Double? = null,
+    val rollDeg: Double? = null,
+    val tiltAngleDeg: Double? = null, // angle from vertical
+    val tiltValid: Boolean = false,
+) {
+    /** Total satellites tracked across all constellations currently in view. */
+    val satellitesTracked: Int get() = satellitesInView.count { (it.snr ?: 0) > 0 }
+}

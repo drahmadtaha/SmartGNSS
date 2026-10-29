@@ -49,9 +49,41 @@ class NmeaParser {
             "GSV" -> parseGsv(type, f)
             "RMC" -> parseRmc(f)
             "VTG" -> parseVtg(f)
+            "GST" -> parseGst(f)
+            "HPR", "TRA" -> parseHpr(f)   // UM982 heading/pitch/roll
             else -> false
         }
         return if (changed) fix else null
+    }
+
+    /** GST: position-error statistics → horizontal / vertical RMS. */
+    private fun parseGst(f: List<String>): Boolean {
+        if (f.size < 9) return false
+        val sdLat = f[6].toDoubleOrNull()
+        val sdLon = f[7].toDoubleOrNull()
+        val sdAlt = f[8].toDoubleOrNull()
+        val hr = if (sdLat != null && sdLon != null)
+            kotlin.math.hypot(sdLat, sdLon) else fix.hrms
+        fix = fix.copy(hrms = hr, vrms = sdAlt ?: fix.vrms)
+        return true
+    }
+
+    /** HPR/TRA: heading, pitch, roll (deg). Tilt = angle from vertical. */
+    private fun parseHpr(f: List<String>): Boolean {
+        if (f.size < 5) return false
+        val h = f[2].toDoubleOrNull()
+        val p = f[3].toDoubleOrNull()
+        val r = f[4].toDoubleOrNull()
+        val tilt = if (p != null && r != null) {
+            val pr = Math.toRadians(p); val rr = Math.toRadians(r)
+            Math.toDegrees(kotlin.math.acos(kotlin.math.cos(pr) * kotlin.math.cos(rr)))
+        } else null
+        fix = fix.copy(
+            headingDeg = h ?: fix.headingDeg,
+            pitchDeg = p, rollDeg = r,
+            tiltAngleDeg = tilt, tiltValid = tilt != null,
+        )
+        return true
     }
 
     private fun parseGga(f: List<String>): Boolean {

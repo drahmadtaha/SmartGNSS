@@ -69,7 +69,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    /** Copy a picked geoid file into app storage, load (GTX/ISG), and persist it. */
+    /** Copy a picked geoid file into app storage, load (GTX/ISG/SGF), and persist it. */
     fun loadGeoidFromUri(uri: android.net.Uri): String? {
         return try {
             val ctx = getApplication<android.app.Application>()
@@ -81,6 +81,22 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
             setGeoid(GeoidModel.Grid.loadAny(dest))
             null
         } catch (e: Exception) { e.message ?: "Load failed" }
+    }
+
+    // --- Tilt measurement (UM982 IMU) ---------------------------------------
+
+    private val _tiltMode = MutableStateFlow(false)
+    val tiltMode = _tiltMode.asStateFlow()
+
+    /** Toggle tilt compensation and send the matching UM982 commands. */
+    fun setTiltMode(on: Boolean) {
+        _tiltMode.value = on
+        com.smartgnss.core.device.Um982.tilt(on).forEach { sendCommand(it) }
+    }
+
+    /** Send the UM982 rover + NMEA + heading configuration to the receiver. */
+    fun configureReceiver() {
+        com.smartgnss.core.device.Um982.configureRover().forEach { sendCommand(it) }
     }
 
     private val _mountPoints = MutableStateFlow<List<MountPoint>>(emptyList())

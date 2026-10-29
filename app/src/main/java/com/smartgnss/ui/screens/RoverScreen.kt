@@ -37,6 +37,10 @@ fun RoverScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         Column(Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Rover · Data Link", style = MaterialTheme.typography.titleLarge)
+            androidx.compose.material3.OutlinedButton(
+                onClick = { vm.configureReceiver() },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Configure UM982 rover (mode + NMEA + heading)") }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(link == DataLink.NTRIP, { link = DataLink.NTRIP }, label = { Text("NTRIP (Internet)") })
                 FilterChip(link == DataLink.INTERNAL_RADIO, { link = DataLink.INTERNAL_RADIO }, label = { Text("Internal Radio") })
