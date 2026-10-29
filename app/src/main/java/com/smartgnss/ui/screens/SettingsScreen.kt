@@ -46,16 +46,8 @@ fun SettingsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            try {
-                val file = File(context.cacheDir, "geoid.gtx")
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    file.outputStream().use { input.copyTo(it) }
-                }
-                vm.setGeoid(GeoidModel.Grid.load(file))
-                message = "Geoid grid loaded."
-            } catch (e: Exception) {
-                message = "Could not load grid: ${e.message}"
-            }
+            val err = vm.loadGeoidFromUri(uri)
+            message = err?.let { "Could not load grid: $it" } ?: "Geoid grid loaded."
         }
     }
 
@@ -98,9 +90,10 @@ fun SettingsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 
                 Button(onClick = { gridPicker.launch(arrayOf("*/*")) },
                     modifier = Modifier.fillMaxWidth()) {
-                    Text("Load geoid grid (.gtx)")
+                    Text("Load geoid grid (.gtx / .isg)")
                 }
-                Text("Drop an EGM2008 or local .gtx grid on the device, then load it here.",
+                Text("Load an EGM2008 or local geoid grid (GTX or ISG). It is copied into " +
+                    "the app and reloaded automatically next time.",
                     style = MaterialTheme.typography.bodySmall)
             }
         }

@@ -80,13 +80,8 @@ fun CoordinateSystemScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier)
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            try {
-                val file = File(context.cacheDir, "geoid.gtx")
-                context.contentResolver.openInputStream(uri)?.use { inp ->
-                    file.outputStream().use { inp.copyTo(it) }
-                }
-                vm.setGeoid(GeoidModel.Grid.load(file)); message = "Geoid grid loaded."
-            } catch (e: Exception) { message = "Could not load grid: ${e.message}" }
+            val err = vm.loadGeoidFromUri(uri)
+            message = err?.let { "Could not load grid: $it" } ?: "Geoid grid loaded."
         }
     }
 
@@ -190,7 +185,7 @@ fun CoordinateSystemScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier)
                     OutlinedButton(onClick = { vm.setGeoid(GeoidModel.None) },
                         modifier = Modifier.weight(1f)) { Text("None") }
                     OutlinedButton(onClick = { gridPicker.launch(arrayOf("*/*")) },
-                        modifier = Modifier.weight(1f)) { Text("Load .gtx") }
+                        modifier = Modifier.weight(1f)) { Text("Load grid") }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Num(constN, { constN = it }, "Constant N (m)", Modifier.weight(1f))

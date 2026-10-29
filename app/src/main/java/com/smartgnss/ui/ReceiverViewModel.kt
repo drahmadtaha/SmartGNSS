@@ -49,13 +49,37 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- Coordinate system / geoid / stakeout state --------------------------
 
-    private val _crs = MutableStateFlow(CoordinateSystem.UTM_36N)
-    val crs = _crs.asStateFlow()
-    fun setCrs(c: CoordinateSystem) { _crs.value = c }
+    val settings = com.smartgnss.core.settings.SettingsStore(app)
 
-    private val _geoid = MutableStateFlow<GeoidModel>(GeoidModel.None)
+    private val _crs = MutableStateFlow(
+        settings.loadCrs()?.let { CoordinateSystem(it) } ?: CoordinateSystem.UTM_36N
+    )
+    val crs = _crs.asStateFlow()
+    fun setCrs(c: CoordinateSystem) { _crs.value = c; settings.saveCrs(c.def) }
+
+    private val _geoid = MutableStateFlow(settings.loadGeoid())
     val geoid = _geoid.asStateFlow()
-    fun setGeoid(g: GeoidModel) { _geoid.value = g }
+    fun setGeoid(g: GeoidModel) { _geoid.value = g; settings.saveGeoid(g) }
+
+    /** NTRIP values to pre-fill the Corrections screen. */
+    val ntripDefaults = settings.loadNtrip()
+    fun saveNtrip(host: String, port: Int, mount: String, user: String, pass: String) {
+        settings.saveNtrip(
+            com.smartgnss.core.settings.NtripSaved(host, port, mount, user, pass)
+        )
+    }
+
+    /** Copy a picked geoid file into app storage, load (GTX/ISG), and persist it. */
+    fun loadGeoidFromUri(uri: android.net.Uri): String? = try {
+        val ctx = getApplication<android.app.Application>()
+        val name = (uri.lastPathSegment ?: "geoid.dat").substringAfterLast('/')
+        val dest = java.io.File(ctx.filesDir, "geoid_$name")
+        ctx.contentResolver.openInputStream(uri)?.use { inp ->
+            dest.outputStream().use { inp.copyTo(it) }
+        } ?: return "Cannot open file"
+        setGeoid(GeoidModel.Grid.loadAny(dest))
+        null
+    } catch (e: Exception) { e.message ?: "Load failed" }
 
     private val _mountPoints = MutableStateFlow<List<MountPoint>>(emptyList())
     val mountPoints = _mountPoints.asStateFlow()

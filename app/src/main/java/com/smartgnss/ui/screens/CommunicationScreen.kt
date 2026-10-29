@@ -6,6 +6,8 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -57,6 +59,10 @@ fun CommunicationScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     var tcpHost by remember { mutableStateOf("") }
     var tcpPort by remember { mutableStateOf("9000") }
 
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { refresh++ }
+
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -103,8 +109,12 @@ fun CommunicationScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         when (kind) {
             ConnKind.BLUETOOTH, ConnKind.BLE -> {
                 if (!hasBtPerm(context)) {
-                    Text("Grant Bluetooth permission in Android settings to list paired devices.",
+                    Text("Bluetooth permission is needed to list and connect to paired receivers.",
                         style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        onClick = { permLauncher.launch(btPermissions()) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Grant Bluetooth permission") }
                 } else {
                     val bonded = remember(refresh) {
                         val mgr = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -177,3 +187,9 @@ private fun hasBtPerm(context: Context): Boolean {
         Manifest.permission.BLUETOOTH_CONNECT else Manifest.permission.BLUETOOTH
     return ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
 }
+
+/** Runtime Bluetooth permissions to request (Android 12+ only needs these). */
+private fun btPermissions(): Array<String> =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+        arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
+    else arrayOf(Manifest.permission.BLUETOOTH)

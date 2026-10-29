@@ -37,11 +37,12 @@ fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     }
 
     val state by vm.ntripState.collectAsState()
-    var host by remember { mutableStateOf("") }
-    var port by remember { mutableStateOf("2101") }
-    var mount by remember { mutableStateOf("") }
-    var user by remember { mutableStateOf("") }
-    var pass by remember { mutableStateOf("") }
+    val saved = vm.ntripDefaults
+    var host by remember { mutableStateOf(saved?.host ?: "") }
+    var port by remember { mutableStateOf(saved?.port?.toString() ?: "2101") }
+    var mount by remember { mutableStateOf(saved?.mountPoint ?: "") }
+    var user by remember { mutableStateOf(saved?.username ?: "") }
+    var pass by remember { mutableStateOf(saved?.password ?: "") }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -105,10 +106,12 @@ fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         if (state == NtripState.IDLE || state == NtripState.ERROR) {
             Button(
                 onClick = {
+                    val p = port.toIntOrNull() ?: 2101
+                    vm.saveNtrip(host.trim(), p, mount.trim(), user.trim(), pass)
                     vm.startNtrip(
                         NtripConfig(
                             host = host.trim(),
-                            port = port.toIntOrNull() ?: 2101,
+                            port = p,
                             mountPoint = mount.trim(),
                             username = user.trim(),
                             password = pass,

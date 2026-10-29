@@ -117,6 +117,10 @@ fun ActivationScreen(
                 style = MaterialTheme.typography.bodyMedium)
         }
 
+        Text("Activation is saved to:\n${vm.license.licenseLocation}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+
         if (!gate && status is ActivationState.Activated) {
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { vm.license.deactivate() }) {
