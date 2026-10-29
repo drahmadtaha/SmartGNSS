@@ -62,12 +62,16 @@ class BleTransport(
 
         @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+            emitGattDump(g)   // show the receiver's real BLE layout in the terminal
             val (notify, write) = pickSerialCharacteristics(g)
             if (notify == null || write == null) {
                 if (!ready.isCompleted)
                     ready.completeExceptionally(IllegalStateException("No serial characteristics found"))
                 return
             }
+            _incoming.tryEmit(
+                "[BLE] using notify=${notify.uuid} write=${write.uuid}\n".toByteArray()
+            )
             writeChar = write
             notifyUuid = notify.uuid
             // Prefer write-without-response for serial streaming when available.
@@ -101,24 +105,31 @@ class BleTransport(
         }
     }
 
+    private fun isNotify(c: BluetoothGattCharacteristic) =
+        c.properties and (BluetoothGattCharacteristic.PROPERTY_NOTIFY or
+            BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0
+    private fun isWrite(c: BluetoothGattCharacteristic) =
+        c.properties and (BluetoothGattCharacteristic.PROPERTY_WRITE or
+            BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0
+
     /** Find a (notify, write) characteristic pair across the GATT services. */
+    @SuppressLint("MissingPermission")
     private fun pickSerialCharacteristics(
         g: BluetoothGatt
     ): Pair<BluetoothGattCharacteristic?, BluetoothGattCharacteristic?> {
-        fun isNotify(c: BluetoothGattCharacteristic) =
-            c.properties and (BluetoothGattCharacteristic.PROPERTY_NOTIFY or
-                BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0
-        fun isWrite(c: BluetoothGattCharacteristic) =
-            c.properties and (BluetoothGattCharacteristic.PROPERTY_WRITE or
-                BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0
-
-        // 1. Nordic UART, if present.
-        g.getService(NUS_SERVICE)?.let { s ->
-            val n = s.getCharacteristic(NUS_TX); val w = s.getCharacteristic(NUS_RX)
+        // 1. Known serial-service UUIDs first, picking chars by property.
+        for (su in KNOWN_SERIAL_SERVICES) {
+            val s = g.getService(su) ?: continue
+            val n = s.characteristics.firstOrNull { isNotify(it) }
+            val w = s.characteristics.firstOrNull { isWrite(it) }
             if (n != null && w != null) return n to w
         }
-        // 2. A service that has both a notify and a write characteristic.
+        // 2. Any non-standard service that has both a notify and a write char.
         for (s in g.services) {
+            if (s.uuid.toString().startsWith("00001800") ||   // Generic Access
+                s.uuid.toString().startsWith("00001801") ||   // Generic Attribute
+                s.uuid.toString().startsWith("0000180a") ||   // Device Information
+                s.uuid.toString().startsWith("0000180f")) continue // Battery
             val n = s.characteristics.firstOrNull { isNotify(it) }
             val w = s.characteristics.firstOrNull { isWrite(it) }
             if (n != null && w != null) return n to w
@@ -126,6 +137,24 @@ class BleTransport(
         // 3. Any notify + any write anywhere.
         val allChars = g.services.flatMap { it.characteristics }
         return allChars.firstOrNull { isNotify(it) } to allChars.firstOrNull { isWrite(it) }
+    }
+
+    /** Emit the full GATT layout into the data stream so it shows in the terminal. */
+    @SuppressLint("MissingPermission")
+    private fun emitGattDump(g: BluetoothGatt) {
+        val sb = StringBuilder("[BLE] discovered services:\n")
+        for (s in g.services) {
+            sb.append("  SVC ").append(s.uuid).append('\n')
+            for (c in s.characteristics) {
+                val f = buildString {
+                    if (isNotify(c)) append('N')
+                    if (isWrite(c)) append('W')
+                    if (c.properties and BluetoothGattCharacteristic.PROPERTY_READ != 0) append('R')
+                }
+                sb.append("    CHR ").append(c.uuid).append(" [").append(f).append("]\n")
+            }
+        }
+        _incoming.tryEmit(sb.toString().toByteArray())
     }
 
     @SuppressLint("MissingPermission")
@@ -166,9 +195,16 @@ class BleTransport(
     }
 
     companion object {
-        val NUS_SERVICE: UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
-        val NUS_RX: UUID = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
-        val NUS_TX: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
         val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+
+        // BLE-serial service UUIDs used by common GNSS receivers (from the ICE
+        // and X-Survey apps). Tried in order; characteristics picked by property.
+        val KNOWN_SERIAL_SERVICES: List<UUID> = listOf(
+            UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E"), // Nordic UART
+            UUID.fromString("49535343-FE7D-4AE5-8FA9-9FAFD205E455"), // Microchip/ISSC Transparent UART
+            UUID.fromString("0000FFF0-0000-1000-8000-00805F9B34FB"), // FFF0 serial
+            UUID.fromString("0000FFE0-0000-1000-8000-00805F9B34FB"), // FFE0 (HM-10) serial
+            UUID.fromString("258EAFA5-E914-47DA-95CA-C5AB0DC85B11"), // custom (ICE / X-Survey)
+        )
     }
 }
