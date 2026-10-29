@@ -1,9 +1,30 @@
 # Smart GNSS
 
 An Android app to control GNSS receivers, built to ship with your instruments.
-It connects to a receiver over **USB-serial or Bluetooth**, parses the live
-**NMEA** solution, streams **RTK corrections over NTRIP**, records **survey
-points**, and is gated by an **activation-code system that you alone control**.
+
+**Connections:** USB-serial · Bluetooth classic (SPP) · Bluetooth Low Energy
+(Nordic UART) · Wi-Fi / TCP.
+
+**Positioning & geodesy:**
+- Live NMEA solution (fix quality, sats, DOPs, correction age)
+- Coordinate systems: UTM zones, **Palestine Grid 1923**, **Israeli TM (ITM)** —
+  add your own belts in `core/geo/CoordinateSystem.kt`
+- Datum transforms (7-parameter Helmert) and Transverse Mercator projection
+- **ENH output** (grid East/North + ellipsoidal and orthometric height)
+- **Geoid models**: none / constant / loadable **GTX grid** (EGM2008 or local)
+- **Sky plot** of satellites by azimuth/elevation/SNR
+
+**RTK:** NTRIP client streaming RTCM to the receiver, with **mountpoint
+discovery** (source-table browsing) and VRS GGA uplink.
+
+**Field work:** survey point recording + CSV export, and **stake-out**
+navigation to a target grid point (ΔE/ΔN, distance, bearing, direction arrow).
+
+**Licensing:** an **activation-code system that you alone control** — offline,
+signed, device/receiver-bound, with feature tiers and expiry.
+
+*Roadmap (not yet built): CAD / line stake-out, coordinate-system manager UI,
+raw-observation (RINEX) logging, background scanning for BLE/Wi-Fi receivers.*
 
 > This is a clean, from-scratch project — your product, your code, your keys.
 > It does not contain or depend on any other vendor's app.
@@ -66,6 +87,24 @@ Requires **Android Studio** (Koala or newer) with the Android SDK.
 
 The release APK is what you install on / ship with your instruments:
 `./gradlew assembleRelease` (sign it with your own keystore).
+
+### Get an APK without installing Android Studio (GitHub builds it for you)
+
+A ready CI workflow is included at `.github/workflows/build.yml`. It compiles the
+APK on GitHub's servers — you install nothing locally.
+
+1. Create a new GitHub repository and push this project to it:
+   ```
+   git init && git add . && git commit -m "Smart GNSS"
+   git branch -M main
+   git remote add origin https://github.com/<you>/SmartGNSS.git
+   git push -u origin main
+   ```
+2. On GitHub open the **Actions** tab → the **Build APK** run.
+3. When it finishes (a few minutes), download the **SmartGNSS-debug-apk**
+   artifact. That's your installable `app-debug.apk`.
+
+You can re-run it any time from Actions → *Build APK* → **Run workflow**.
 
 > Note: this project was authored without a local Android SDK, so it has not been
 > compiled here — the licensing crypto was verified independently, but expect to

@@ -55,6 +55,19 @@ fun StatusScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             }
         }
 
+        val grid = vm.gridFor(fix)
+        val crs by vm.crs.collectAsState()
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(crs.name, style = MaterialTheme.typography.titleSmall)
+                Field("East", grid?.let { "%.3f m".format(it.east) } ?: "—")
+                Field("North", grid?.let { "%.3f m".format(it.north) } ?: "—")
+                Field("Ellipsoidal h", grid?.let { "%.3f m".format(it.ellipsoidalHeight) } ?: "—")
+                Field("Orthometric H",
+                    grid?.orthometricHeight?.let { "%.3f m".format(it) } ?: "— (set geoid)")
+            }
+        }
+
         Text("Satellites in view (${fix.satellitesInView.size})",
             style = MaterialTheme.typography.titleSmall)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {

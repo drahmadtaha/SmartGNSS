@@ -1,5 +1,6 @@
 package com.smartgnss.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -77,6 +79,28 @@ fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         OutlinedTextField(pass, { pass = it }, label = { Text("Password") },
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth())
+
+        val mounts by vm.mountPoints.collectAsState()
+        OutlinedButton(
+            onClick = { vm.fetchMountPoints(host.trim(), port.toIntOrNull() ?: 2101, user.trim(), pass) },
+            enabled = host.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Get mountpoints") }
+        if (mounts.isNotEmpty()) {
+            Text("${mounts.size} mountpoints — tap to select",
+                style = MaterialTheme.typography.bodySmall)
+            mounts.take(60).forEach { mp ->
+                Card(
+                    Modifier.fillMaxWidth().clickable { mount = mp.mount },
+                ) {
+                    Column(Modifier.padding(10.dp)) {
+                        Text(mp.mount, style = MaterialTheme.typography.titleSmall)
+                        Text("${mp.format} · ${mp.identifier}",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
 
         if (state == NtripState.IDLE || state == NtripState.ERROR) {
             Button(

@@ -3,12 +3,16 @@ package com.smartgnss.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.smartgnss.core.geo.CoordinateSystem
+import com.smartgnss.core.geo.GeoidModel
 import com.smartgnss.core.license.Feature
 import com.smartgnss.core.license.LicenseManager
 import com.smartgnss.core.nmea.GnssFix
 import com.smartgnss.core.nmea.NmeaParser
+import com.smartgnss.core.ntrip.MountPoint
 import com.smartgnss.core.ntrip.NtripClient
 import com.smartgnss.core.ntrip.NtripConfig
+import com.smartgnss.core.ntrip.NtripSourceTable
 import com.smartgnss.core.ntrip.NtripState
 import com.smartgnss.core.survey.SurveyStore
 import com.smartgnss.core.transport.LinkState
@@ -41,6 +45,42 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _ntripState = MutableStateFlow(NtripState.IDLE)
     val ntripState = _ntripState.asStateFlow()
+
+    // --- Coordinate system / geoid / stakeout state --------------------------
+
+    private val _crs = MutableStateFlow(CoordinateSystem.UTM_36N)
+    val crs = _crs.asStateFlow()
+    fun setCrs(c: CoordinateSystem) { _crs.value = c }
+
+    private val _geoid = MutableStateFlow<GeoidModel>(GeoidModel.None)
+    val geoid = _geoid.asStateFlow()
+    fun setGeoid(g: GeoidModel) { _geoid.value = g }
+
+    private val _mountPoints = MutableStateFlow<List<MountPoint>>(emptyList())
+    val mountPoints = _mountPoints.asStateFlow()
+
+    private val _stakeTarget = MutableStateFlow<StakeTarget?>(null)
+    val stakeTarget = _stakeTarget.asStateFlow()
+    fun setStakeTarget(t: StakeTarget?) { _stakeTarget.value = t }
+
+    /** Project the current fix into the selected grid, with both heights. */
+    fun gridFor(fix: GnssFix): GridResult? {
+        val lat = fix.latitude ?: return null
+        val lon = fix.longitude ?: return null
+        val hEllipsoidal = (fix.altitudeMsl ?: 0.0) + (fix.geoidSep ?: 0.0)
+        val (e, n) = _crs.value.toGrid(lat, lon, hEllipsoidal)
+        val sep = _geoid.value.separation(lat, lon)
+        val ortho = if (sep != null) hEllipsoidal - sep else null
+        return GridResult(e, n, hEllipsoidal, ortho)
+    }
+
+    fun fetchMountPoints(host: String, port: Int, user: String, pass: String) {
+        viewModelScope.launch {
+            _mountPoints.value = try {
+                NtripSourceTable.fetch(host, port, user, pass)
+            } catch (_: Exception) { emptyList() }
+        }
+    }
 
     private var transport: Transport? = null
     private var readJob: Job? = null
@@ -125,3 +165,18 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() { disconnect() }
 }
+
+/** Grid projection of a fix: East/North plus ellipsoidal and orthometric height. */
+data class GridResult(
+    val east: Double,
+    val north: Double,
+    val ellipsoidalHeight: Double,
+    val orthometricHeight: Double?,
+)
+
+/** A point to stake out, stored in the selected grid's East/North. */
+data class StakeTarget(
+    val name: String,
+    val east: Double,
+    val north: Double,
+)
