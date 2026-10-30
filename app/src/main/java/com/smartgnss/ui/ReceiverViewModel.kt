@@ -214,12 +214,24 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         val client = NtripClient(config)
         client.onLog = { appendRaw((it + "\n").toByteArray(Charsets.ISO_8859_1)) }
         ntrip = client
+        // RTCM is forwarded to the receiver through this channel so chunks reach
+        // the Bluetooth link in order, on a background thread.
+        val rtcmChannel = kotlinx.coroutines.channels.Channel<ByteArray>(
+            kotlinx.coroutines.channels.Channel.UNLIMITED
+        )
         ntripJob = viewModelScope.launch {
             launch { client.state.collect { _ntripState.value = it } }
+            launch(kotlinx.coroutines.Dispatchers.IO) {
+                for (chunk in rtcmChannel) {
+                    try { transport?.write(chunk) } catch (_: Exception) {}
+                }
+            }
             // Push our GGA up to the caster only once the stream is up, immediately
             // and then every second — VRS / nearest-base mountpoints send no
             // corrections until they have a fresh position (this is what X-Survey does).
-            launch {
+            // MUST run on IO: a socket write on the main thread throws
+            // NetworkOnMainThreadException, which silently dropped every uplink.
+            launch(kotlinx.coroutines.Dispatchers.IO) {
                 while (true) {
                     if (_ntripState.value == NtripState.STREAMING) {
                         val g = lastGga
@@ -247,9 +259,10 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
                     if (_rtcmBytes.value % 2048 < rtcm.size) // log roughly every ~2 KB
                         appendRaw("[RTCM from caster → receiver: ${_rtcmBytes.value} B]\n"
                             .toByteArray(Charsets.ISO_8859_1))
-                    viewModelScope.launch { transport?.write(rtcm) }
+                    rtcmChannel.trySend(rtcm)
                 }
             } catch (_: Exception) { _ntripState.value = NtripState.ERROR }
+            finally { rtcmChannel.close() }
         }
     }
 
