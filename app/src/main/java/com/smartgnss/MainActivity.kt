@@ -150,7 +150,7 @@ private fun Shell(vm: ReceiverViewModel) {
     var tab by remember { mutableStateOf(Tab.PROJECT) }
     var sub by remember { mutableStateOf<Sub?>(null) }
 
-    BackHandler(enabled = sub != null) { sub = null }
+    BackHandler(enabled = sub != null) { vm.beepClick(); sub = null }
 
     Scaffold(
         topBar = {
@@ -166,7 +166,7 @@ private fun Shell(vm: ReceiverViewModel) {
                     TopAppBar(
                         title = { Text(sub!!.title) },
                         navigationIcon = {
-                            IconButton(onClick = { sub = null }) {
+                            IconButton(onClick = { vm.beepClick(); sub = null }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                             }
                         },
@@ -182,7 +182,7 @@ private fun Shell(vm: ReceiverViewModel) {
                     Tab.entries.forEach { t ->
                         NavigationBarItem(
                             selected = tab == t,
-                            onClick = { tab = t },
+                            onClick = { vm.beepClick(); tab = t },
                             icon = { Icon(t.icon, contentDescription = t.label) },
                             label = { Text(t.label) },
                             colors = NavigationBarItemDefaults.colors(),
@@ -193,7 +193,7 @@ private fun Shell(vm: ReceiverViewModel) {
         },
     ) { inner ->
         Box(Modifier.fillMaxSize().padding(inner)) {
-            val go: (Sub) -> Unit = { sub = it }
+            val go: (Sub) -> Unit = { vm.beepClick(); sub = it }
             if (sub == null) {
                 MenuGrid(menuFor(tab, go))
             } else {

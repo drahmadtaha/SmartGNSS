@@ -44,7 +44,7 @@ fun CorrectionIndicator(
     val angle by transition.animateFloat(
         initialValue = 0f, targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1100, easing = LinearEasing),
+            animation = tween(2600, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ), label = "angle",
     )
@@ -52,7 +52,7 @@ fun CorrectionIndicator(
     val sweep by transition.animateFloat(
         initialValue = 70f, targetValue = 290f,
         animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
+            animation = tween(2000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
         ), label = "sweep",
     )

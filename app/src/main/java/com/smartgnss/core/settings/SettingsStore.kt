@@ -3,11 +3,22 @@ package com.smartgnss.core.settings
 import android.content.Context
 import com.smartgnss.core.geo.CrsDefinition
 import com.smartgnss.core.geo.GeoidModel
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
 /** Saved NTRIP connection, pre-filled next time the Corrections screen opens. */
 data class NtripSaved(
+    val host: String,
+    val port: Int,
+    val mountPoint: String,
+    val username: String,
+    val password: String,
+)
+
+/** A named NTRIP account in the account library (several casters can be stored). */
+data class NtripAccount(
+    val name: String,
     val host: String,
     val port: Int,
     val mountPoint: String,
@@ -75,6 +86,10 @@ class SettingsStore(context: Context) {
     fun savePhaseCenter(h: Double) { prefs.edit().putFloat(KEY_PHASE, h.toFloat()).apply() }
     fun loadPhaseCenter(): Double = prefs.getFloat(KEY_PHASE, 0.0f).toDouble()
 
+    // --- Device model --------------------------------------------------------
+    fun saveDeviceModel(name: String) { prefs.edit().putString(KEY_MODEL, name).apply() }
+    fun loadDeviceModel(): String? = prefs.getString(KEY_MODEL, null)
+
     fun loadNtrip(): NtripSaved? {
         val host = prefs.getString(KEY_N_HOST, null) ?: return null
         return NtripSaved(
@@ -86,8 +101,31 @@ class SettingsStore(context: Context) {
         )
     }
 
+    // --- NTRIP account library ----------------------------------------------
+    fun loadNtripAccounts(): List<NtripAccount> = try {
+        val raw = prefs.getString(KEY_N_LIST, null) ?: return emptyList()
+        val arr = JSONArray(raw)
+        (0 until arr.length()).map {
+            val o = arr.getJSONObject(it)
+            NtripAccount(
+                o.optString("n"), o.optString("h"), o.optInt("p", 2101),
+                o.optString("m"), o.optString("u"), o.optString("pw"),
+            )
+        }
+    } catch (_: Exception) { emptyList() }
+
+    fun saveNtripAccounts(list: List<NtripAccount>) {
+        val arr = JSONArray()
+        list.forEach {
+            arr.put(JSONObject().put("n", it.name).put("h", it.host).put("p", it.port)
+                .put("m", it.mountPoint).put("u", it.username).put("pw", it.password))
+        }
+        prefs.edit().putString(KEY_N_LIST, arr.toString()).apply()
+    }
+
     companion object {
         private const val KEY_CRS = "crs_json"
+        private const val KEY_N_LIST = "ntrip_accounts"
         private const val KEY_GEOID_TYPE = "geoid_type"
         private const val KEY_GEOID_N = "geoid_n"
         private const val KEY_GEOID_PATH = "geoid_path"
@@ -98,5 +136,6 @@ class SettingsStore(context: Context) {
         private const val KEY_N_PASS = "ntrip_pass"
         private const val KEY_ANT_H = "antenna_height"
         private const val KEY_PHASE = "phase_center"
+        private const val KEY_MODEL = "device_model"
     }
 }

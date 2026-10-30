@@ -29,11 +29,22 @@ object Um982 {
     const val HEADING_OUTPUT = "GPHPR 1"           // 1 Hz for normal use
     const val HEADING_OUTPUT_10HZ = "GPHPR 0.1"    // 10 Hz for tilt measurement
 
-    /** Enable the IMU so GGA carries the tilt-compensated position. */
-    const val TILT_ENABLE = "CONFIG INS ENABLE"
-
-    /** Disable tilt compensation (back to normal, pole-vertical measuring). */
-    const val TILT_DISABLE = "CONFIG INS DISABLE"
+    // --- ICE / CUBERTK AT-command layer (wraps the Unicore core) -------------
+    // The ICE receiver also speaks AT commands (AT+AUTH activates it; +VER/+DTYPE
+    // are AT replies). Tilt/IMU is controlled here, not via Unicore CONFIG INS.
+    /** Enable the pole-tilt IMU with the pole length in mm: AT+TILT=1,<poleMm>.
+     *  (Confirmed from the ICE M10 integration dossier — 1800 = 1.8 m pole.) */
+    fun tiltEnable(poleMm: Int) = "AT+TILT=1,$poleMm"
+    /** Disable the pole-tilt IMU. */
+    const val TILT_DISABLE = "AT+TILT=0,0"
+    /** Query the antenna phase-centre offset (device replies +PHASECENTEROFFSET=mm). */
+    const val QUERY_PHASE_CENTER = "AT+PHASECENTEROFFSET=?"
+    /** IMU calibration step 1 (hold the pole vertical and steady). */
+    const val CALIB_STEP1 = "AT+CALIBRATIONSTEP1"
+    /** IMU calibration step 2 (after rotating / shaking the receiver). */
+    const val CALIB_STEP2 = "AT+CALIBRATIONSTEP2"
+    /** Query device type / firmware (AT replies: +DTYPE=…, +VER=…). */
+    const val QUERY_TYPE = "AT+DTYPE=?"
 
     /** Persist the current configuration across power cycles. */
     const val SAVE = "SAVECONFIG"
@@ -50,10 +61,12 @@ object Um982 {
      *  automatically on connect so GGA/height starts flowing. */
     fun enableOutput(): List<String> = nmeaOutput + HEADING_OUTPUT
 
-    /** Turn tilt on/off. Tilt runs the heading/pitch/roll output at 10 Hz so the
-     *  pole-tilt angle is fresh at the moment a point is recorded; back to 1 Hz
-     *  when disabled. */
-    fun tilt(on: Boolean): List<String> =
-        if (on) listOf(TILT_ENABLE, HEADING_OUTPUT_10HZ)
-        else listOf(TILT_DISABLE, HEADING_OUTPUT)
+    /** Turn tilt on/off via the ICE AT layer. Enabling with the pole length starts
+     *  the $GPFMI IMU stream (tilt angle). */
+    fun tilt(on: Boolean, poleMm: Int = 1800): List<String> =
+        if (on) listOf(tiltEnable(poleMm)) else listOf(TILT_DISABLE)
+
+    /** Full IMU calibration sequence step commands, sent as the user is guided
+     *  through the motion. */
+    fun calibrationStep(step: Int): String = if (step <= 1) CALIB_STEP1 else CALIB_STEP2
 }

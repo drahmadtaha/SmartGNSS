@@ -55,6 +55,9 @@ class NmeaParser {
             "VTG" -> parseVtg(f)
             "GST" -> parseGst(f)
             "HPR", "TRA" -> parseHpr(f)   // UM982 heading/pitch/roll
+            "SXT" -> parseKsxt(f)         // $KSXT: position + heading/pitch/roll
+            "FPD" -> parseFpd(f)          // $GPFPD: heading/pitch/roll
+            "FMI" -> parseFmi(f)          // $GPFMI: ICE M10 IMU tilt (tiltX/tiltY rad)
             else -> false
         }
         return if (changed) fix else null
@@ -72,20 +75,60 @@ class NmeaParser {
         return true
     }
 
-    /** HPR/TRA: heading, pitch, roll (deg). Tilt = angle from vertical. */
-    private fun parseHpr(f: List<String>): Boolean {
-        if (f.size < 5) return false
-        val h = f[2].toDoubleOrNull()
-        val p = f[3].toDoubleOrNull()
-        val r = f[4].toDoubleOrNull()
-        val tilt = if (p != null && r != null) {
-            val pr = Math.toRadians(p); val rr = Math.toRadians(r)
-            Math.toDegrees(kotlin.math.acos(kotlin.math.cos(pr) * kotlin.math.cos(rr)))
-        } else null
+    /** Tilt (angle from vertical) from pitch & roll in degrees. */
+    private fun tiltFrom(p: Double?, r: Double?): Double? {
+        if (p == null || r == null) return null
+        val pr = Math.toRadians(p); val rr = Math.toRadians(r)
+        return Math.toDegrees(kotlin.math.acos(kotlin.math.cos(pr) * kotlin.math.cos(rr)))
+    }
+
+    private fun setAttitude(h: Double?, p: Double?, r: Double?) {
+        val tilt = tiltFrom(p, r)
         fix = fix.copy(
             headingDeg = h ?: fix.headingDeg,
-            pitchDeg = p, rollDeg = r,
-            tiltAngleDeg = tilt, tiltValid = tilt != null,
+            pitchDeg = p ?: fix.pitchDeg, rollDeg = r ?: fix.rollDeg,
+            tiltAngleDeg = tilt ?: fix.tiltAngleDeg, tiltValid = tilt != null,
+        )
+    }
+
+    /** HPR/TRA: heading, pitch, roll (deg). */
+    private fun parseHpr(f: List<String>): Boolean {
+        if (f.size < 5) return false
+        setAttitude(f[2].toDoubleOrNull(), f[3].toDoubleOrNull(), f[4].toDoubleOrNull())
+        return true
+    }
+
+    /** $KSXT,time,lon,lat,hgt,heading,pitch,track,speed,roll,… */
+    private fun parseKsxt(f: List<String>): Boolean {
+        if (f.size < 10) return false
+        setAttitude(f[5].toDoubleOrNull(), f[6].toDoubleOrNull(), f[9].toDoubleOrNull())
+        return true
+    }
+
+    /** $GPFPD,week,time,heading,pitch,roll,lat,lon,alt,… */
+    private fun parseFpd(f: List<String>): Boolean {
+        if (f.size < 6) return false
+        setAttitude(f[3].toDoubleOrNull(), f[4].toDoubleOrNull(), f[5].toDoubleOrNull())
+        return true
+    }
+
+    /**
+     * $GPFMI — ICE M10/Cube IMU sentence:
+     * $GPFMI,time,lat,lon,height,tiltX,tiltY,heading,acc,sats,…,fix,status
+     * tiltX/tiltY are tilt components in radians; tilt angle from vertical is
+     * θ = hypot(tiltX, tiltY). Heading is 9.99999 when invalid (single antenna).
+     */
+    private fun parseFmi(f: List<String>): Boolean {
+        if (f.size < 7) return false
+        val tx = f[5].toDoubleOrNull()
+        val ty = f[6].toDoubleOrNull()
+        val tiltDeg = if (tx != null && ty != null)
+            Math.toDegrees(kotlin.math.hypot(tx, ty)) else null
+        val hdg = f[7].toDoubleOrNull()?.takeIf { it in 0.0..360.0 }
+        fix = fix.copy(
+            tiltAngleDeg = tiltDeg ?: fix.tiltAngleDeg,
+            tiltValid = tiltDeg != null,
+            headingDeg = hdg ?: fix.headingDeg,
         )
         return true
     }

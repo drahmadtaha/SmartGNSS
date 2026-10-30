@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -12,14 +13,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -49,6 +59,7 @@ import com.smartgnss.ui.ReceiverViewModel
  * form (host+port on one row, mountpoint with inline fetch, user+password), and
  * one big connect/disconnect action.
  */
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     if (!vm.license.has(Feature.RTK_NTRIP)) {
@@ -74,7 +85,10 @@ fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 
     // Hoisted into the ViewModel so the entries survive leaving/returning to the screen.
     val form by vm.ntripForm.collectAsState()
+    val accounts by vm.ntripAccounts.collectAsState()
     var showPass by remember { mutableStateOf(false) }
+    var showSave by remember { mutableStateOf(false) }
+    var saveName by remember { mutableStateOf("") }
 
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -97,6 +111,40 @@ fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 
         // ---- Status header with rotating indicator -------------------------
         StatusHeader(state, fix.quality, flowing, rtcmBytes, ggaUplinks, ageMs)
+
+        // ---- Saved NTRIP accounts (library) --------------------------------
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("Saved accounts", style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold)
+                    TextButton(onClick = { saveName = ""; showSave = true }) { Text("Save current") }
+                }
+                if (accounts.isEmpty()) {
+                    Text("No saved accounts. Fill the form below and tap “Save current”.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        accounts.forEach { a ->
+                            val selected = a.host == form.host && a.mountPoint == form.mount &&
+                                a.username == form.user
+                            InputChip(
+                                selected = selected,
+                                onClick = { vm.beepClick(); vm.selectNtripAccount(a) },
+                                label = { Text(a.name) },
+                                trailingIcon = {
+                                    Icon(Icons.Filled.Close, contentDescription = "Delete",
+                                        modifier = Modifier.size(16.dp)
+                                            .clickable { vm.deleteNtripAccount(a.name) })
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         // ---- CORS / NTRIP account form -------------------------------------
         Card(Modifier.fillMaxWidth()) {
@@ -232,6 +280,26 @@ fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.error,
             )
         }
+    }
+
+    if (showSave) {
+        AlertDialog(
+            onDismissRequest = { showSave = false },
+            title = { Text("Save NTRIP account") },
+            text = {
+                OutlinedTextField(
+                    saveName, { saveName = it },
+                    label = { Text("Account name") }, singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { vm.saveNtripAccount(saveName); showSave = false },
+                    enabled = saveName.isNotBlank(),
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showSave = false }) { Text("Cancel") } },
+        )
     }
 }
 

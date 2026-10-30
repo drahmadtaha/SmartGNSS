@@ -107,12 +107,29 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
      *  antenna reference point (ARP) up to the L1 phase centre. It depends on the
      *  antenna model, not on the survey, so it is set once and added to the pole
      *  height when reducing to the ground mark. */
-    private val _phaseCenterOffset = MutableStateFlow(settings.loadPhaseCenter())
+    private val _phaseCenterOffset = MutableStateFlow(
+        com.smartgnss.core.device.DeviceModel.fromName(settings.loadDeviceModel()).phaseCenter
+    )
     val phaseCenterOffset = _phaseCenterOffset.asStateFlow()
     fun setPhaseCenterOffset(h: Double) { _phaseCenterOffset.value = h; settings.savePhaseCenter(h) }
 
     /** Total vertical offset from the ground mark to the antenna phase centre. */
     fun effectiveAntennaHeight(): Double = _antennaHeight.value + _phaseCenterOffset.value
+
+    /** Selected receiver model (Cube RTK / M10). Persisted. */
+    private val _deviceModel = MutableStateFlow(
+        com.smartgnss.core.device.DeviceModel.fromName(settings.loadDeviceModel())
+    )
+    val deviceModel = _deviceModel.asStateFlow()
+    fun setDeviceModel(m: com.smartgnss.core.device.DeviceModel) {
+        _deviceModel.value = m; settings.saveDeviceModel(m.name)
+        // Each model has its own antenna phase-centre offset.
+        setPhaseCenterOffset(m.phaseCenter)
+    }
+
+    /** Run the IMU tilt-calibration step (sent while the user performs the motion). */
+    fun tiltCalibrationStep(step: Int) =
+        sendCommand(com.smartgnss.core.device.Um982.calibrationStep(step))
 
     /** Live NTRIP form state. Hoisted here so it survives screen navigation and
      *  is persisted on every edit (the screen's own state was lost on leaving). */
@@ -136,6 +153,33 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         updateNtripForm(NtripForm(host, port.toString(), mount, user, pass))
     }
 
+    // --- NTRIP account library (several casters) -----------------------------
+    private val _ntripAccounts = MutableStateFlow(settings.loadNtripAccounts())
+    val ntripAccounts = _ntripAccounts.asStateFlow()
+
+    /** Save the current form as a named account (overwrites one with the same name). */
+    fun saveNtripAccount(name: String) {
+        val f = _ntripForm.value
+        val acc = com.smartgnss.core.settings.NtripAccount(
+            name.trim(), f.host.trim(), f.port.toIntOrNull() ?: 2101,
+            f.mount.trim(), f.user.trim(), f.pass,
+        )
+        val list = _ntripAccounts.value.filterNot { it.name.equals(acc.name, true) } + acc
+        _ntripAccounts.value = list
+        settings.saveNtripAccounts(list)
+    }
+
+    fun deleteNtripAccount(name: String) {
+        val list = _ntripAccounts.value.filterNot { it.name == name }
+        _ntripAccounts.value = list
+        settings.saveNtripAccounts(list)
+    }
+
+    /** Load a saved account into the active form. */
+    fun selectNtripAccount(a: com.smartgnss.core.settings.NtripAccount) {
+        updateNtripForm(NtripForm(a.host, a.port.toString(), a.mountPoint, a.username, a.password))
+    }
+
     /** Copy a picked geoid file into app storage, load (GTX/ISG/SGF), and persist it. */
     fun loadGeoidFromUri(uri: android.net.Uri): String? {
         return try {
@@ -155,10 +199,11 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     private val _tiltMode = MutableStateFlow(false)
     val tiltMode = _tiltMode.asStateFlow()
 
-    /** Toggle tilt compensation and send the matching UM982 commands. */
+    /** Toggle tilt and send AT+TILT with the current pole length (mm). */
     fun setTiltMode(on: Boolean) {
         _tiltMode.value = on
-        com.smartgnss.core.device.Um982.tilt(on).forEach { sendCommand(it) }
+        val poleMm = (_antennaHeight.value * 1000).toInt().coerceIn(100, 6000)
+        com.smartgnss.core.device.Um982.tilt(on, poleMm).forEach { sendCommand(it) }
     }
 
     /** Send the UM982 rover + NMEA + heading configuration to the receiver. */

@@ -59,13 +59,19 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     var antH by remember { mutableStateOf("%.3f".format(vm.antennaHeight.value)) }
     var detail by remember { mutableStateOf<SurveyPoint?>(null) }
     var showExport by remember { mutableStateOf(false) }
+    var showTiltCal by remember { mutableStateOf(false) }
 
     Column(modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
 
         // Mode toggle: Normal <-> Tilt
         Card(
-            Modifier.fillMaxWidth().clickable { vm.setTiltMode(!tilt) },
+            Modifier.fillMaxWidth().clickable {
+                vm.beepClick()
+                val turningOn = !tilt
+                vm.setTiltMode(turningOn)
+                if (turningOn) showTiltCal = true
+            },
             colors = CardDefaults.cardColors(
                 containerColor = if (tilt) SurveyColors.fixedGreen.copy(alpha = 0.14f)
                 else MaterialTheme.colorScheme.surfaceVariant
@@ -172,6 +178,42 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     }
 
     detail?.let { p -> PointDetailDialog(p, crs.toGrid(p.latitude, p.longitude, p.altitude ?: 0.0)) { detail = null } }
+
+    if (showTiltCal) TiltCalibrationDialog(vm) { showTiltCal = false }
+}
+
+/** Guided IMU tilt initialization (the receiver's pole-tilt needs motion to align). */
+@Composable
+private fun TiltCalibrationDialog(vm: ReceiverViewModel, onClose: () -> Unit) {
+    val fix by vm.fix.collectAsState()
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Tilt initialization") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Single-antenna tilt uses the IMU, which must be aligned by motion " +
+                    "before use. Keep a Fixed solution throughout.",
+                    style = MaterialTheme.typography.bodySmall)
+                Text("1. Hold the pole vertical and still, then tap Step 1.",
+                    style = MaterialTheme.typography.bodyMedium)
+                Button(onClick = { vm.beepClick(); vm.tiltCalibrationStep(1) },
+                    modifier = Modifier.fillMaxWidth()) { Text("Send Step 1 (hold vertical)") }
+                Text("2. Gently rotate/shake the receiver and walk ~5 m, then tap Step 2.",
+                    style = MaterialTheme.typography.bodyMedium)
+                Button(onClick = { vm.beepClick(); vm.tiltCalibrationStep(2) },
+                    modifier = Modifier.fillMaxWidth()) { Text("Send Step 2 (after motion)") }
+                Text("Tilt status: " + if (fix.tiltValid) "READY (${fix.tiltAngleDeg?.let { "%.1f°".format(it) } ?: "—"})"
+                    else "not aligned yet",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (fix.tiltValid) SurveyColors.fixedGreen else MaterialTheme.colorScheme.error)
+                Text("Watch the Data Terminal for the receiver's responses and share the log " +
+                    "if tilt stays unaligned.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Done") } },
+    )
 }
 
 @Composable

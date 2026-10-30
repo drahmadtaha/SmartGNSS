@@ -55,6 +55,18 @@ fun SettingsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        com.smartgnss.ui.theme.SectionHeader("Receiver model")
+        val model by vm.deviceModel.collectAsState()
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.smartgnss.core.device.DeviceModel.entries.forEach { m ->
+                if (m == model)
+                    Button(onClick = {}, modifier = Modifier.weight(1f)) { Text(m.label) }
+                else
+                    OutlinedButton(onClick = { vm.setDeviceModel(m) },
+                        modifier = Modifier.weight(1f)) { Text(m.label) }
+            }
+        }
+
         com.smartgnss.ui.theme.SectionHeader("Coordinate system")
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(8.dp)) {
