@@ -183,17 +183,31 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         stopNtrip()
         val client = NtripClient(config)
         ntrip = client
+        var rtcmTotal = 0
         ntripJob = viewModelScope.launch {
             launch { client.state.collect { _ntripState.value = it } }
-            // Periodically push our GGA up to the caster (VRS).
+            // Push our GGA up to the caster promptly and often (VRS / nearest-base
+            // mountpoints send no corrections until they know our position).
             launch {
                 while (true) {
-                    lastGga?.let { client.sendGga(it) }
-                    kotlinx.coroutines.delay(10_000)
+                    val g = lastGga
+                    if (g != null) {
+                        client.sendGga(g)
+                        appendRaw(">> [GGA uplink to caster]\n".toByteArray(Charsets.ISO_8859_1))
+                    } else {
+                        appendRaw(">> [waiting for GGA before uplink]\n".toByteArray(Charsets.ISO_8859_1))
+                    }
+                    kotlinx.coroutines.delay(3_000)
                 }
             }
             try {
-                client.stream { rtcm -> viewModelScope.launch { transport?.write(rtcm) } }
+                client.stream { rtcm ->
+                    rtcmTotal += rtcm.size
+                    if (rtcmTotal % 2048 < rtcm.size) // log roughly every ~2 KB
+                        appendRaw("[RTCM from caster → receiver: ${rtcmTotal} B]\n"
+                            .toByteArray(Charsets.ISO_8859_1))
+                    viewModelScope.launch { transport?.write(rtcm) }
+                }
             } catch (_: Exception) { _ntripState.value = NtripState.ERROR }
         }
     }
@@ -207,6 +221,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     /** Send an arbitrary command line to the receiver (config console). */
     fun sendCommand(line: String) {
         val data = (line.trimEnd() + "\r\n").toByteArray(Charsets.US_ASCII)
+        appendRaw("\n>> $line\n".toByteArray(Charsets.ISO_8859_1))
         viewModelScope.launch { transport?.write(data) }
     }
 
