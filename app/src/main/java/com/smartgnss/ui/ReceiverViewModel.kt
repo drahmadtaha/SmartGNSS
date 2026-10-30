@@ -198,22 +198,28 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         _lastRtcmAt.value = 0L
         _ggaUplinks.value = 0
         val client = NtripClient(config)
+        client.onLog = { appendRaw((it + "\n").toByteArray(Charsets.ISO_8859_1)) }
         ntrip = client
         ntripJob = viewModelScope.launch {
             launch { client.state.collect { _ntripState.value = it } }
-            // Push our GGA up to the caster promptly and often (VRS / nearest-base
-            // mountpoints send no corrections until they know our position).
+            // Push our GGA up to the caster only once the stream is up, immediately
+            // and then every second — VRS / nearest-base mountpoints send no
+            // corrections until they have a fresh position (this is what X-Survey does).
             launch {
                 while (true) {
-                    val g = lastGga
-                    if (g != null) {
-                        client.sendGga(g)
-                        _ggaUplinks.value += 1
-                        appendRaw(">> [GGA uplink to caster]\n".toByteArray(Charsets.ISO_8859_1))
+                    if (_ntripState.value == NtripState.STREAMING) {
+                        val g = lastGga
+                        if (g != null) {
+                            client.sendGga(g)
+                            _ggaUplinks.value += 1
+                            appendRaw(">> [GGA uplink to caster]\n".toByteArray(Charsets.ISO_8859_1))
+                        } else {
+                            appendRaw(">> [streaming but no GGA from receiver yet]\n".toByteArray(Charsets.ISO_8859_1))
+                        }
+                        kotlinx.coroutines.delay(1_000)
                     } else {
-                        appendRaw(">> [waiting for GGA before uplink]\n".toByteArray(Charsets.ISO_8859_1))
+                        kotlinx.coroutines.delay(300)
                     }
-                    kotlinx.coroutines.delay(3_000)
                 }
             }
             try {

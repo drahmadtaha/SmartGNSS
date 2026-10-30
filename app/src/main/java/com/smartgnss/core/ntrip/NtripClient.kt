@@ -38,6 +38,9 @@ class NtripClient(private val config: NtripConfig) {
     private var socket: Socket? = null
     private var output: OutputStream? = null
 
+    /** Optional diagnostic sink — receives the caster's response header and events. */
+    var onLog: ((String) -> Unit)? = null
+
     /**
      * Blocks (on an IO dispatcher) for the life of the stream, delivering RTCM
      * bytes to [onRtcm]. Cancel the coroutine to stop. Throws on connect error.
@@ -60,10 +63,14 @@ class NtripClient(private val config: NtripConfig) {
 
             _state.value = NtripState.STREAMING
             val buf = ByteArray(4096)
+            var sawData = false
             while (coroutineContext.isActive) {
                 val n = input.read(buf)
-                if (n < 0) break
-                if (n > 0) onRtcm(buf.copyOf(n))
+                if (n < 0) { onLog?.invoke("[caster] stream closed by server"); break }
+                if (n > 0) {
+                    if (!sawData) { sawData = true; onLog?.invoke("[caster] first RTCM bytes received ✓") }
+                    onRtcm(buf.copyOf(n))
+                }
             }
         } catch (e: Exception) {
             _state.value = NtripState.ERROR
@@ -88,7 +95,9 @@ class NtripClient(private val config: NtripConfig) {
         )
         val req = buildString {
             append("GET /${config.mountPoint} HTTP/1.0\r\n")
-            append("User-Agent: NTRIP SmartGNSS/1.0\r\n")
+            append("Host: ${config.host}:${config.port}\r\n")
+            // A widely-accepted NTRIP client identifier (some casters reject unknown agents).
+            append("User-Agent: NTRIP GNSSInternetRadio/1.4.10\r\n")
             append("Accept: */*\r\n")
             if (config.username.isNotEmpty())
                 append("Authorization: Basic $auth\r\n")
@@ -109,8 +118,14 @@ class NtripClient(private val config: NtripConfig) {
             if (sb.contains("\r\n\r\n") || sb.contains("\n\n")) break
         }
         val header = sb.toString()
+        // Surface the caster's actual first line for diagnostics (X-Survey shows this too).
+        val firstLine = header.lineSequence().firstOrNull()?.trim().orEmpty()
+        onLog?.invoke("[caster] reply: $firstLine")
         // A sourcetable reply means the mountpoint was wrong, not a data stream.
-        if (header.contains("SOURCETABLE", ignoreCase = true)) return false
+        if (header.contains("SOURCETABLE", ignoreCase = true)) {
+            onLog?.invoke("[caster] returned a SOURCETABLE → mount point not served to this account")
+            return false
+        }
         return header.contains("ICY 200") || header.contains("200 OK")
     }
 
