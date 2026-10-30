@@ -55,7 +55,7 @@ fun SettingsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("Coordinate system", style = MaterialTheme.typography.titleLarge)
+        com.smartgnss.ui.theme.SectionHeader("Coordinate system")
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(8.dp)) {
                 CoordinateSystem.all.forEach { c ->
@@ -72,7 +72,7 @@ fun SettingsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        Text("Geoid model", style = MaterialTheme.typography.titleLarge)
+        com.smartgnss.ui.theme.SectionHeader("Geoid model")
         Text("Current: ${geoid.label}", style = MaterialTheme.typography.bodyMedium)
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -90,10 +90,10 @@ fun SettingsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 
                 Button(onClick = { gridPicker.launch(arrayOf("*/*")) },
                     modifier = Modifier.fillMaxWidth()) {
-                    Text("Load geoid grid (.gtx / .isg)")
+                    Text("Load geoid grid (.gtx / .isg / .sgf / .ggf)")
                 }
-                Text("Load an EGM2008 or local geoid grid (GTX or ISG). It is copied into " +
-                    "the app and reloaded automatically next time.",
+                Text("Load an EGM2008 or local geoid grid (GTX, ISG, South SGF, or GGF). " +
+                    "It is copied into the app and reloaded automatically next time.",
                     style = MaterialTheme.typography.bodySmall)
             }
         }

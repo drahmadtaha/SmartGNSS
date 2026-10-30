@@ -48,9 +48,7 @@ fun AreaScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("Area & perimeter", style = MaterialTheme.typography.titleLarge)
-        Text(crs.name, style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        com.smartgnss.ui.theme.SectionHeader("Result · ${crs.name}")
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -69,7 +67,7 @@ fun AreaScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         }
 
         if (en.isNotEmpty()) {
-            Text("Vertices (grid E, N)", style = MaterialTheme.typography.labelLarge)
+            com.smartgnss.ui.theme.SectionHeader("Vertices (grid E, N)")
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(points) { p ->
                     val (e, n) = crs.toGrid(p.latitude, p.longitude, p.altitude ?: 0.0)

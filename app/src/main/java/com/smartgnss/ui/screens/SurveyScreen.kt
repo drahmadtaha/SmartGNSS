@@ -86,23 +86,8 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        // Live solution summary
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(fix.quality.label, color = fixQualityColor(fix.quality),
-                        style = MaterialTheme.typography.titleMedium)
-                    Text("${fix.satellitesUsed} sats", fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodyMedium)
-                }
-                LabeledValue("HRMS / VRMS",
-                    "${fix.hrms?.let { "%.3f".format(it) } ?: "—"} / " +
-                        "${fix.vrms?.let { "%.3f".format(it) } ?: "—"} m")
-                LabeledValue("PDOP / HDOP",
-                    "${fix.pdop?.let { "%.2f".format(it) } ?: "—"} / " +
-                        "${fix.hdop?.let { "%.2f".format(it) } ?: "—"}")
-            }
-        }
+        // Shared X-Survey solution panel (quality · N/E/H · HRMS/VRMS/PDOP).
+        SurveyStatusPanel(vm)
 
         // Name / code / antenna
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -140,8 +125,8 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             ) { Text("Export") }
         }
 
-        Text("Points: ${points.size}", style = MaterialTheme.typography.labelLarge)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        com.smartgnss.ui.theme.SectionHeader("Collected points (${points.size})")
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(points.reversed()) { p ->
                 Card(Modifier.fillMaxWidth().clickable { detail = p }) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {

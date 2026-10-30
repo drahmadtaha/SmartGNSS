@@ -44,10 +44,10 @@ fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 
     Column(modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Stake-out", style = MaterialTheme.typography.titleLarge)
-        Text("Grid: ${vm.crs.collectAsState().value.name}",
-            style = MaterialTheme.typography.bodySmall)
 
+        SurveyStatusPanel(vm)
+
+        com.smartgnss.ui.theme.SectionHeader("Target point")
         OutlinedTextField(name, { name = it }, label = { Text("Target name") },
             modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

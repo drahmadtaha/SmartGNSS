@@ -89,11 +89,10 @@ fun CoordinateSystemScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier)
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("Coordinate System", style = MaterialTheme.typography.titleLarge)
-        Text("Active: ${crs.name}", style = MaterialTheme.typography.bodyMedium,
+        Text("Active: ${crs.name}", style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary)
 
-        Text("Templates", style = MaterialTheme.typography.labelLarge)
+        com.smartgnss.ui.theme.SectionHeader("Templates")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CrsDefinition.templates.forEach { t ->
                 AssistChip(onClick = { loadTemplate(t); message = "Template loaded — edit and apply." },

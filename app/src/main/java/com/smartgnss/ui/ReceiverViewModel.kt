@@ -58,6 +58,19 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     private val _ntripState = MutableStateFlow(NtripState.IDLE)
     val ntripState = _ntripState.asStateFlow()
 
+    /** Total RTCM bytes received from the caster this session. */
+    private val _rtcmBytes = MutableStateFlow(0L)
+    val rtcmBytes = _rtcmBytes.asStateFlow()
+
+    /** elapsedRealtime() of the last RTCM chunk, or 0 if none yet. The UI uses
+     *  this to spin the "receiving corrections" indicator and show data age. */
+    private val _lastRtcmAt = MutableStateFlow(0L)
+    val lastRtcmAt = _lastRtcmAt.asStateFlow()
+
+    /** How many GGA lines we've pushed up to the caster (VRS uplink health). */
+    private val _ggaUplinks = MutableStateFlow(0)
+    val ggaUplinks = _ggaUplinks.asStateFlow()
+
     // --- Coordinate system / geoid / stakeout state --------------------------
 
     val settings = com.smartgnss.core.settings.SettingsStore(app)
@@ -181,9 +194,11 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     fun startNtrip(config: NtripConfig) {
         if (!license.has(Feature.RTK_NTRIP)) return   // feature gate
         stopNtrip()
+        _rtcmBytes.value = 0L
+        _lastRtcmAt.value = 0L
+        _ggaUplinks.value = 0
         val client = NtripClient(config)
         ntrip = client
-        var rtcmTotal = 0
         ntripJob = viewModelScope.launch {
             launch { client.state.collect { _ntripState.value = it } }
             // Push our GGA up to the caster promptly and often (VRS / nearest-base
@@ -193,6 +208,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
                     val g = lastGga
                     if (g != null) {
                         client.sendGga(g)
+                        _ggaUplinks.value += 1
                         appendRaw(">> [GGA uplink to caster]\n".toByteArray(Charsets.ISO_8859_1))
                     } else {
                         appendRaw(">> [waiting for GGA before uplink]\n".toByteArray(Charsets.ISO_8859_1))
@@ -202,9 +218,10 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
             }
             try {
                 client.stream { rtcm ->
-                    rtcmTotal += rtcm.size
-                    if (rtcmTotal % 2048 < rtcm.size) // log roughly every ~2 KB
-                        appendRaw("[RTCM from caster → receiver: ${rtcmTotal} B]\n"
+                    _rtcmBytes.value += rtcm.size
+                    _lastRtcmAt.value = android.os.SystemClock.elapsedRealtime()
+                    if (_rtcmBytes.value % 2048 < rtcm.size) // log roughly every ~2 KB
+                        appendRaw("[RTCM from caster → receiver: ${_rtcmBytes.value} B]\n"
                             .toByteArray(Charsets.ISO_8859_1))
                     viewModelScope.launch { transport?.write(rtcm) }
                 }
@@ -216,6 +233,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         ntripJob?.cancel(); ntripJob = null
         ntrip?.close(); ntrip = null
         _ntripState.value = NtripState.IDLE
+        _lastRtcmAt.value = 0L
     }
 
     /** Send an arbitrary command line to the receiver (config console). */

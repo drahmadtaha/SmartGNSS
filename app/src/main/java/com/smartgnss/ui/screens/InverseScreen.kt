@@ -36,14 +36,12 @@ fun InverseScreen(modifier: Modifier = Modifier) {
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("Inverse (point to point)", style = MaterialTheme.typography.titleLarge)
-
-        Text("From point", style = MaterialTheme.typography.labelLarge)
+        com.smartgnss.ui.theme.SectionHeader("From point")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(n1, { n1 = it }, label = { Text("North 1") }, modifier = Modifier.weight(1f))
             OutlinedTextField(e1, { e1 = it }, label = { Text("East 1") }, modifier = Modifier.weight(1f))
         }
-        Text("To point", style = MaterialTheme.typography.labelLarge)
+        com.smartgnss.ui.theme.SectionHeader("To point")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(n2, { n2 = it }, label = { Text("North 2") }, modifier = Modifier.weight(1f))
             OutlinedTextField(e2, { e2 = it }, label = { Text("East 2") }, modifier = Modifier.weight(1f))
