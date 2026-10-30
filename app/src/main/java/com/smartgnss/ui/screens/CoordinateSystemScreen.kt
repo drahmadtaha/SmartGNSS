@@ -41,7 +41,11 @@ import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun CoordinateSystemScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
+fun CoordinateSystemScreen(
+    vm: ReceiverViewModel,
+    modifier: Modifier = Modifier,
+    onApplied: () -> Unit = {},
+) {
     val context = LocalContext.current
     val crs by vm.crs.collectAsState()
     val geoid by vm.geoid.collectAsState()
@@ -170,7 +174,11 @@ fun CoordinateSystemScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier)
                     k0 = k0.toDoubleOrNull() ?: 1.0,
                     falseEast = fe.toDoubleOrNull() ?: 0.0, falseNorth = fn.toDoubleOrNull() ?: 0.0,
                 )
-                vm.setCrs(CoordinateSystem(def)); message = "Applied “${def.name}”."
+                vm.setCrs(CoordinateSystem(def))
+                android.widget.Toast.makeText(
+                    context, "Applied “${def.name}”", android.widget.Toast.LENGTH_SHORT
+                ).show()
+                onApplied()   // return to the Project tab
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Apply coordinate system") }

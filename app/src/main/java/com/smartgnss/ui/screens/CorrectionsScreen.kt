@@ -36,6 +36,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import com.smartgnss.ui.theme.Pill
 import com.smartgnss.core.license.Feature
 import com.smartgnss.core.nmea.FixQuality
 import com.smartgnss.core.ntrip.NtripConfig
@@ -83,6 +84,21 @@ fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        // ---- Phone internet status (NTRIP needs a live connection) ---------
+        val net = rememberNetStatus()
+        val online = net != NetStatus.OFFLINE
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Pill(net.label, if (online) Color(0xFF17A34A) else Color(0xFFEF4746))
+            Spacer(Modifier.width(10.dp))
+            Text(
+                if (online) "Internet connected — ready for corrections"
+                else "No internet — connect to Wi-Fi or mobile data to stream NTRIP",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (online) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.error,
+            )
+        }
+
         // ---- Status header with rotating indicator -------------------------
         StatusHeader(state, fix.quality, flowing, rtcmBytes, ggaUplinks, ageMs)
 

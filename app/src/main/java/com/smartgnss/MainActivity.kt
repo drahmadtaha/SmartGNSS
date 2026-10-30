@@ -196,17 +196,17 @@ private fun Shell(vm: ReceiverViewModel) {
             if (sub == null) {
                 MenuGrid(menuFor(tab, go))
             } else {
-                SubContent(vm, sub!!)
+                SubContent(vm, sub!!, onCrsApplied = { tab = Tab.PROJECT; sub = null })
             }
         }
     }
 }
 
 @Composable
-private fun SubContent(vm: ReceiverViewModel, sub: Sub) {
+private fun SubContent(vm: ReceiverViewModel, sub: Sub, onCrsApplied: () -> Unit) {
     when (sub) {
         Sub.PROJECTS -> ProjectsScreen(vm)
-        Sub.COORD_SYS -> CoordinateSystemScreen(vm)
+        Sub.COORD_SYS -> CoordinateSystemScreen(vm, onApplied = onCrsApplied)
         Sub.SETTINGS -> SettingsScreen(vm)
         Sub.POINT_DB -> SurveyScreen(vm)
         Sub.POINT_SURVEY -> SurveyScreen(vm)
