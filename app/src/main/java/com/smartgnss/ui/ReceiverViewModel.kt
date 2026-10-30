@@ -45,8 +45,8 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     private fun appendRaw(bytes: ByteArray) {
         val s = String(bytes, Charsets.ISO_8859_1)
         val combined = _rawLog.value + s
-        _rawLog.value = if (combined.length > 6000)
-            combined.substring(combined.length - 6000) else combined
+        _rawLog.value = if (combined.length > 60_000)
+            combined.substring(combined.length - 60_000) else combined
     }
 
     private val _link = MutableStateFlow(LinkState.DISCONNECTED)
@@ -158,7 +158,13 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
                     parser.feed(bytes).forEach { _fix.value = it }
                 }
             }
-            try { t.connect() } catch (_: Exception) { _link.value = LinkState.ERROR }
+            try {
+                t.connect()
+                // Once connected, ask the receiver to output NMEA/GGA so height
+                // and full position flow (the ICE app does this on connect too).
+                kotlinx.coroutines.delay(1200)
+                com.smartgnss.core.device.Um982.enableOutput().forEach { sendCommand(it) }
+            } catch (_: Exception) { _link.value = LinkState.ERROR }
         }
     }
 

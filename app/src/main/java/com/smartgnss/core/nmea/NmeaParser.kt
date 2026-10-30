@@ -13,6 +13,10 @@ class NmeaParser {
     private val lineBuf = StringBuilder()
     private var fix = GnssFix()
 
+    // Satellites used, accumulated across the GSA sentences of one epoch
+    // (receivers that omit GGA still report used SVs in GSA).
+    private val gsaPrns = HashSet<Int>()
+
     // GSV accumulates over several sentences per constellation.
     private val gsvWork = mutableMapOf<String, MutableList<Satellite>>()
     private val gsvExpected = mutableMapOf<String, Int>()
@@ -88,12 +92,16 @@ class NmeaParser {
 
     private fun parseGga(f: List<String>): Boolean {
         if (f.size < 15) return false
+        // Some receivers (incl. ICE/UM982) always report 000 sats in GGA — in
+        // that case keep the GSA-derived count instead of zeroing it.
+        val ggaSats = f[7].toIntOrNull() ?: 0
+        if (ggaSats > 0) gsaPrns.clear()
         fix = fix.copy(
             utc = f[1].ifBlank { null },
             latitude = coord(f[2], f[3]),
             longitude = coord(f[4], f[5]),
             quality = FixQuality.from(f[6].toIntOrNull()),
-            satellitesUsed = f[7].toIntOrNull() ?: fix.satellitesUsed,
+            satellitesUsed = if (ggaSats > 0) ggaSats else fix.satellitesUsed,
             hdop = f[8].toDoubleOrNull() ?: fix.hdop,
             altitudeMsl = f[9].toDoubleOrNull(),
             geoidSep = f[11].toDoubleOrNull(),
@@ -105,23 +113,50 @@ class NmeaParser {
 
     private fun parseGsa(f: List<String>): Boolean {
         if (f.size < 18) return false
+        // Fields 3..14 are up to 12 used-satellite PRNs.
+        for (i in 3..14) if (i < f.size) f[i].toIntOrNull()?.let { gsaPrns.add(it) }
+        val fixType = f[2].toIntOrNull() ?: 0
         fix = fix.copy(
             pdop = f[15].toDoubleOrNull() ?: fix.pdop,
             hdop = f[16].toDoubleOrNull() ?: fix.hdop,
             vdop = f[17].toDoubleOrNull() ?: fix.vdop,
+            satellitesUsed = maxOf(fix.satellitesUsed, gsaPrns.size),
+            // Basic fix if the receiver sends no GGA quality (RMC may upgrade it).
+            quality = if (fix.quality == FixQuality.NO_FIX && fixType >= 2)
+                FixQuality.GPS else fix.quality,
         )
         return true
     }
 
     private fun parseRmc(f: List<String>): Boolean {
         if (f.size < 9) return false
+        // Finalise the epoch's used-satellite count from the GSA sentences.
+        if (gsaPrns.isNotEmpty()) {
+            fix = fix.copy(satellitesUsed = gsaPrns.size)
+            gsaPrns.clear()
+        }
         val knots = f[7].toDoubleOrNull()
+        // Position mode indicator (NMEA 2.3+), last data field: A/D/R/F/E/N.
+        val posMode = f.getOrNull(12)?.firstOrNull()
+        val rmcQuality = when (posMode) {
+            'R' -> FixQuality.RTK_FIXED
+            'F' -> FixQuality.RTK_FLOAT
+            'D' -> FixQuality.DGPS
+            'A' -> FixQuality.GPS
+            'E' -> FixQuality.ESTIMATED
+            'N' -> FixQuality.NO_FIX
+            else -> null
+        }
         fix = fix.copy(
             utc = f[1].ifBlank { fix.utc },
             latitude = coord(f[3], f[4]) ?: fix.latitude,
             longitude = coord(f[5], f[6]) ?: fix.longitude,
             speedKmh = knots?.let { it * 1.852 } ?: fix.speedKmh,
             headingDeg = f[8].toDoubleOrNull() ?: fix.headingDeg,
+            // Use the RMC mode only when the receiver sends no GGA quality.
+            quality = rmcQuality?.takeIf {
+                fix.quality == FixQuality.NO_FIX || fix.quality == FixQuality.GPS
+            } ?: fix.quality,
         )
         return true
     }

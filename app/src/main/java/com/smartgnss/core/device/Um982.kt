@@ -40,6 +40,10 @@ object Um982 {
     fun configureRover(): List<String> =
         listOf(MODE_ROVER) + nmeaOutput + HEADING_OUTPUT
 
+    /** Just turn on the NMEA + heading output (no mode change) — safe to send
+     *  automatically on connect so GGA/height starts flowing. */
+    fun enableOutput(): List<String> = nmeaOutput + HEADING_OUTPUT
+
     fun tilt(on: Boolean): List<String> =
         if (on) listOf(TILT_ENABLE, HEADING_OUTPUT) else listOf(TILT_DISABLE)
 }

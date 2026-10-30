@@ -28,15 +28,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import com.smartgnss.ui.ReceiverViewModel
+import java.io.File
 
 /** Raw serial terminal: shows bytes coming from the receiver and sends commands. */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun DataTerminalScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     val raw by vm.rawLog.collectAsState()
     var cmd by remember { mutableStateOf("") }
     val scroll = rememberScrollState()
@@ -87,8 +91,29 @@ fun DataTerminalScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                 enabled = cmd.isNotBlank()) { Text("Send") }
         }
 
-        OutlinedButton(onClick = { vm.clearRawLog() }, modifier = Modifier.fillMaxWidth()) {
-            Text("Clear")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    runCatching {
+                        val f = File(context.cacheDir, "smartgnss_log.txt")
+                        f.writeText(raw)
+                        val uri = FileProvider.getUriForFile(
+                            context, "${context.packageName}.fileprovider", f
+                        )
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Smart GNSS log")
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(
+                            android.content.Intent.createChooser(send, "Share log")
+                        )
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            ) { Text("Save & share log") }
+            OutlinedButton(onClick = { vm.clearRawLog() }) { Text("Clear") }
         }
     }
 }
