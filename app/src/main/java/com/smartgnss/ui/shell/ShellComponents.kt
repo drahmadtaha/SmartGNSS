@@ -47,47 +47,90 @@ data class MenuEntry(
     val onClick: () -> Unit,
 )
 
-/** The solution-status strip shown under the app bar (Fixed · H · V · sats …). */
+/**
+ * X-Survey-style solution strip under the app bar: a spinning blue NTRIP ring
+ * (while corrections flow) with the live fix quality, H/V precision, correction
+ * age, satellite count (used/tracked) and the phone's internet status.
+ */
 @Composable
 fun SolutionBar(vm: ReceiverViewModel) {
     val fix by vm.fix.collectAsState()
     val link by vm.link.collectAsState()
+    val ntrip by vm.ntripState.collectAsState()
+    val lastRtcmAt by vm.lastRtcmAt.collectAsState()
     val connected = link == LinkState.CONNECTED
     val color = if (connected) fixQualityColor(fix.quality) else SurveyColors.singleGray
+
+    val now by androidx.compose.runtime.produceState(
+        initialValue = android.os.SystemClock.elapsedRealtime()
+    ) {
+        while (true) { value = android.os.SystemClock.elapsedRealtime(); kotlinx.coroutines.delay(500) }
+    }
+    val flowing = ntrip == com.smartgnss.core.ntrip.NtripState.STREAMING &&
+        lastRtcmAt != 0L && now - lastRtcmAt < 4_000
+
+    val net = com.smartgnss.ui.screens.rememberNetStatus()
+    val online = net != com.smartgnss.ui.screens.NetStatus.OFFLINE
+
+    val short = when (fix.quality) {
+        com.smartgnss.core.nmea.FixQuality.RTK_FIXED -> "FIX"
+        com.smartgnss.core.nmea.FixQuality.RTK_FLOAT -> "FLT"
+        com.smartgnss.core.nmea.FixQuality.DGPS -> "DGP"
+        com.smartgnss.core.nmea.FixQuality.GPS -> "SGL"
+        else -> "—"
+    }
 
     Row(
         Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.size(9.dp)
-                .background(color, RoundedCornerShape(50))
+        // Spinning NTRIP ring with the fix quality inside.
+        com.smartgnss.ui.screens.CorrectionIndicator(
+            flowing = flowing,
+            centerText = if (connected) short else "—",
+            accent = if (flowing) SurveyColors.brandBlue else color,
+            diameter = 34,
         )
-        Spacer(Modifier.size(7.dp))
-        Text(
-            if (connected) fix.quality.label else "No receiver",
-            color = color,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = FontFamily.Monospace,
-        )
+        Spacer(Modifier.size(8.dp))
+        Column {
+            Text(
+                if (connected) fix.quality.label else "No receiver",
+                color = color, style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "H ${fix.hrms?.let { "%.3f".format(it) } ?: "—"}  " +
+                    "V ${fix.vrms?.let { "%.3f".format(it) } ?: "—"}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontFamily = FontFamily.Monospace,
+            )
+        }
         Spacer(Modifier.weight(1f))
-        SolStat("SAT", fix.satellitesUsed.toString())
-        SolStat("HDOP", fix.hdop?.let { "%.1f".format(it) } ?: "—")
-        SolStat("AGE", fix.diffAgeSec?.let { "%.0fs".format(it) } ?: "—")
-    }
-}
-
-@Composable
-private fun SolStat(label: String, value: String) {
-    Row(Modifier.padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("$label ", style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = FontFamily.Monospace)
-        Text(value, style = MaterialTheme.typography.labelLarge,
-            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                "${fix.satellitesUsed}/${fix.satellitesTracked} sats",
+                style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "Age ${fix.diffAgeSec?.let { "%.0fs".format(it) } ?: "—"}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontFamily = FontFamily.Monospace,
+            )
+        }
+        Spacer(Modifier.size(10.dp))
+        Icon(
+            if (online) androidx.compose.material.icons.Icons.Filled.Wifi
+            else androidx.compose.material.icons.Icons.Filled.WifiOff,
+            contentDescription = net.label,
+            tint = if (online) SurveyColors.fixedGreen else SurveyColors.noFixRed,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 

@@ -70,6 +70,7 @@ import com.smartgnss.ui.screens.CoordinateSystemScreen
 import com.smartgnss.ui.screens.CorrectionsScreen
 import com.smartgnss.ui.screens.DataTerminalScreen
 import com.smartgnss.ui.screens.InverseScreen
+import com.smartgnss.ui.screens.PointDatabaseScreen
 import com.smartgnss.ui.screens.ProjectsScreen
 import com.smartgnss.ui.screens.RoverScreen
 import com.smartgnss.ui.screens.SettingsScreen
@@ -208,7 +209,7 @@ private fun SubContent(vm: ReceiverViewModel, sub: Sub, onCrsApplied: () -> Unit
         Sub.PROJECTS -> ProjectsScreen(vm)
         Sub.COORD_SYS -> CoordinateSystemScreen(vm, onApplied = onCrsApplied)
         Sub.SETTINGS -> SettingsScreen(vm)
-        Sub.POINT_DB -> SurveyScreen(vm)
+        Sub.POINT_DB -> PointDatabaseScreen(vm)
         Sub.POINT_SURVEY -> SurveyScreen(vm)
         Sub.POINT_STAKEOUT -> StakeoutScreen(vm)
         Sub.COMMUNICATION -> CommunicationScreen(vm)

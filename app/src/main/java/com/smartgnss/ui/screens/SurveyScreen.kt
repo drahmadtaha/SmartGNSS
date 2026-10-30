@@ -102,9 +102,15 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = {
-                    val p = vm.survey.record(name, code, fix, antH.toDoubleOrNull() ?: vm.antennaHeight.value, tilt)
-                    if (p != null) { name = nextName(name); Toast.makeText(context, "Recorded ${p.name}", Toast.LENGTH_SHORT).show() }
-                    else Toast.makeText(context, "No position fix yet", Toast.LENGTH_SHORT).show()
+                    val p = vm.survey.record(name, code, fix, vm.effectiveAntennaHeight(), tilt)
+                    if (p != null) {
+                        vm.beepMeasure()
+                        name = nextName(name)
+                        Toast.makeText(context, "Recorded ${p.name}", Toast.LENGTH_SHORT).show()
+                    } else {
+                        vm.beepClick()
+                        Toast.makeText(context, "No position fix yet", Toast.LENGTH_SHORT).show()
+                    }
                 },
                 enabled = fix.latitude != null,
                 modifier = Modifier.weight(1f),

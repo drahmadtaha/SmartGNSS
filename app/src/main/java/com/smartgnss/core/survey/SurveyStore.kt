@@ -99,7 +99,9 @@ class SurveyStore(private val context: Context) {
             hrms = fix.hrms, vrms = fix.vrms,
             pdop = fix.pdop, hdop = fix.hdop, vdop = fix.vdop,
             ageSec = fix.diffAgeSec,
-            tiltAngleDeg = if (tiltMode) fix.tiltAngleDeg else null,
+            // Record the tilt angle whenever the receiver provides one (not only
+            // when the mode toggle is on), so it's never silently dropped.
+            tiltAngleDeg = fix.tiltAngleDeg,
             headingDeg = fix.headingDeg, antennaHeight = antennaHeight,
             timestampMs = System.currentTimeMillis(),
         )
@@ -114,6 +116,46 @@ class SurveyStore(private val context: Context) {
     }
 
     fun clear() { _points.value = emptyList(); save() }
+
+    /** Import points from a CSV (our own export format, or name,lat,lon[,h,code]).
+     *  Returns how many rows were added. */
+    fun importCsv(text: String): Int {
+        val lines = text.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+        if (lines.isEmpty()) return 0
+        val header = lines.first().lowercase()
+        val hasHeader = header.contains("name") && (header.contains("lat") || header.contains("east"))
+        val cols = if (hasHeader) header.split(',').map { it.trim() } else emptyList()
+        fun idx(name: String) = cols.indexOfFirst { it == name }
+        val iName = idx("name"); val iCode = idx("code")
+        val iLat = idx("latitude"); val iLon = idx("longitude"); val iH = idx("ortho_h")
+        val added = ArrayList<SurveyPoint>()
+        lines.drop(if (hasHeader) 1 else 0).forEach { line ->
+            val f = line.split(',')
+            fun get(i: Int) = if (i in 0 until f.size) f[i].trim() else ""
+            val lat: Double?; val lon: Double?; val nm: String; val cd: String; val h: Double?
+            if (hasHeader && iLat >= 0 && iLon >= 0) {
+                lat = get(iLat).toDoubleOrNull(); lon = get(iLon).toDoubleOrNull()
+                nm = get(iName).ifBlank { "P${added.size + 1}" }; cd = get(iCode)
+                h = if (iH >= 0) get(iH).toDoubleOrNull() else null
+            } else {
+                // Bare: name,lat,lon[,h,code]
+                nm = get(0).ifBlank { "P${added.size + 1}" }
+                lat = get(1).toDoubleOrNull(); lon = get(2).toDoubleOrNull()
+                h = get(3).toDoubleOrNull(); cd = get(4)
+            }
+            if (lat != null && lon != null) {
+                added += SurveyPoint(
+                    name = nm, code = cd, latitude = lat, longitude = lon, altitude = h,
+                    quality = FixQuality.NO_FIX, satellitesUsed = 0, satellitesTracked = 0,
+                    hrms = null, vrms = null, pdop = null, hdop = null, vdop = null,
+                    ageSec = null, tiltAngleDeg = null, headingDeg = null,
+                    antennaHeight = 0.0, timestampMs = System.currentTimeMillis(),
+                )
+            }
+        }
+        if (added.isNotEmpty()) { _points.value = _points.value + added; save() }
+        return added.size
+    }
 
     private fun keyFor(project: String) = "pts_$project"
 

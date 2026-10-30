@@ -98,6 +98,31 @@ fun SettingsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             }
         }
 
+        com.smartgnss.ui.theme.SectionHeader("Antenna")
+        val phase by vm.phaseCenterOffset.collectAsState()
+        var phaseStr by remember { mutableStateOf("%.4f".format(phase)) }
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Phase-centre offset (m)", style = MaterialTheme.typography.titleSmall)
+                Text("Fixed vertical distance from the antenna reference point up to the " +
+                    "L1 phase centre (from the antenna datasheet). Added to the pole height " +
+                    "when reducing to the ground mark.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(phaseStr, { phaseStr = it }, label = { Text("Offset (m)") },
+                        singleLine = true, modifier = Modifier.weight(1f))
+                    Button(onClick = { phaseStr.toDoubleOrNull()?.let { vm.setPhaseCenterOffset(it) } },
+                        enabled = phaseStr.toDoubleOrNull() != null) { Text("Set") }
+                }
+                Text("Total antenna offset now: %.4f m (pole %.3f + phase %.4f)".format(
+                    vm.effectiveAntennaHeight(), vm.antennaHeight.value, phase),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary)
+            }
+        }
+
         message?.let {
             Text(it, color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.bodyMedium)

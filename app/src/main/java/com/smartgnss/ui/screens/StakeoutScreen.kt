@@ -89,6 +89,13 @@ fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                         else MaterialTheme.colorScheme.onSurface)
                 }
             }
+            // Audio proximity: a beep each 10 cm closer within 2 m, double tone on point.
+            val onPt = dist < 0.05
+            val bucket = if (onPt) -1 else (dist / 0.10).toInt()
+            androidx.compose.runtime.LaunchedEffect(bucket, onPt) {
+                if (onPt) vm.audio.onPoint()
+                else if (dist < 2.0) vm.audio.proximity()
+            }
             DirectionArrow(brg)
         }
     }

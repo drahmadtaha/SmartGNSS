@@ -20,6 +20,9 @@ import com.smartgnss.core.transport.Transport
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -32,14 +35,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     val license = LicenseManager(app)
     val survey = SurveyStore(app)
     val projects = com.smartgnss.core.project.ProjectStore(app)
-
-    init {
-        // Load the open project's points, and switch point sets when it changes.
-        survey.loadProject(projects.current.value)
-        viewModelScope.launch {
-            projects.current.collect { survey.loadProject(it) }
-        }
-    }
+    val audio = com.smartgnss.core.audio.AudioFeedback(app)
 
     private val parser = NmeaParser()
 
@@ -101,11 +97,22 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     val geoid = _geoid.asStateFlow()
     fun setGeoid(g: GeoidModel) { _geoid.value = g; settings.saveGeoid(g) }
 
-    /** Antenna / pole height (m), subtracted from measured heights to get the
-     *  ground mark elevation. Persisted so it survives restarts. */
+    /** Pole / instrument height (m) — the measured height to the antenna
+     *  reference point. Persisted so it survives restarts. */
     private val _antennaHeight = MutableStateFlow(settings.loadAntennaHeight())
     val antennaHeight = _antennaHeight.asStateFlow()
     fun setAntennaHeight(h: Double) { _antennaHeight.value = h; settings.saveAntennaHeight(h) }
+
+    /** Antenna phase-centre offset (m): the fixed vertical distance from the
+     *  antenna reference point (ARP) up to the L1 phase centre. It depends on the
+     *  antenna model, not on the survey, so it is set once and added to the pole
+     *  height when reducing to the ground mark. */
+    private val _phaseCenterOffset = MutableStateFlow(settings.loadPhaseCenter())
+    val phaseCenterOffset = _phaseCenterOffset.asStateFlow()
+    fun setPhaseCenterOffset(h: Double) { _phaseCenterOffset.value = h; settings.savePhaseCenter(h) }
+
+    /** Total vertical offset from the ground mark to the antenna phase centre. */
+    fun effectiveAntennaHeight(): Double = _antennaHeight.value + _phaseCenterOffset.value
 
     /** Live NTRIP form state. Hoisted here so it survives screen navigation and
      *  is persisted on every edit (the screen's own state was lost on leaving). */
@@ -173,8 +180,9 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         val hEllipsoidal = (fix.altitudeMsl ?: 0.0) + (fix.geoidSep ?: 0.0)
         val (e, n) = _crs.value.toGrid(lat, lon, hEllipsoidal)
         val sep = _geoid.value.separation(lat, lon)
-        // Reduce heights to the ground mark by removing the antenna/pole height.
-        val antH = _antennaHeight.value
+        // Reduce heights to the ground mark by removing the full antenna offset
+        // (pole height + phase-centre offset).
+        val antH = effectiveAntennaHeight()
         val groundEllip = hEllipsoidal - antH
         val ortho = if (sep != null) hEllipsoidal - sep - antH else null
         return GridResult(e, n, groundEllip, ortho)
@@ -350,7 +358,29 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         return "\$%s*%02X".format(gpBody, cs2)
     }
 
-    override fun onCleared() { disconnect() }
+    init {
+        // All flows are initialised above this point, so wiring them here is safe.
+        survey.loadProject(projects.current.value)
+        viewModelScope.launch {
+            projects.current.collect { survey.loadProject(it) }
+        }
+        // Speak the solution quality whenever it changes while connected.
+        viewModelScope.launch {
+            combine(
+                _fix.map { it.quality }.distinctUntilChanged(),
+                _link,
+            ) { q, link -> q to link }
+                .collect { (q, link) ->
+                    if (link == LinkState.CONNECTED) audio.speak(q.label)
+                }
+        }
+    }
+
+    override fun onCleared() { disconnect(); audio.release() }
+
+    /** Convenience hooks for the UI. */
+    fun beepClick() = audio.click()
+    fun beepMeasure() = audio.measure()
 }
 
 /** NTRIP connection form fields, kept as text so editing is lossless. */
