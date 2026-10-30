@@ -8,11 +8,15 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothProfile
 import android.content.Context
+import android.os.Build
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
@@ -42,6 +46,11 @@ class BleTransport(
     private var notifyUuid: UUID? = null
     private var mtu = 20
     private val ready = CompletableDeferred<Unit>()
+
+    // Serialise BLE writes: Android allows only one outstanding GATT write, so
+    // each chunk must wait for onCharacteristicWrite before the next is sent.
+    private val writeMutex = Mutex()
+    @Volatile private var writeSignal: CompletableDeferred<Boolean>? = null
 
     @get:SuppressLint("MissingPermission")
     override val description: String
@@ -92,6 +101,13 @@ class BleTransport(
 
         override fun onMtuChanged(g: BluetoothGatt, newMtu: Int, status: Int) {
             if (newMtu > 0) mtu = newMtu
+        }
+
+        override fun onCharacteristicWrite(
+            g: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int
+        ) {
+            // Release the next chunk once this one has actually been sent.
+            writeSignal?.complete(status == BluetoothGatt.GATT_SUCCESS)
         }
 
         override fun onCharacteristicChanged(g: BluetoothGatt, ch: BluetoothGattCharacteristic) {
@@ -172,15 +188,27 @@ class BleTransport(
     }
 
     @SuppressLint("MissingPermission")
-    override suspend fun write(data: ByteArray) {
-        val ch = writeChar ?: return
-        val g = gatt ?: return
+    override suspend fun write(data: ByteArray) = writeMutex.withLock {
+        val ch = writeChar ?: return@withLock
+        val g = gatt ?: return@withLock
         val chunk = (mtu - 3).coerceAtLeast(20)
         var offset = 0
         while (offset < data.size) {
             val end = minOf(offset + chunk, data.size)
-            ch.value = data.copyOfRange(offset, end)
-            g.writeCharacteristic(ch)
+            val part = data.copyOfRange(offset, end)
+            val signal = CompletableDeferred<Boolean>()
+            writeSignal = signal
+            val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                g.writeCharacteristic(ch, part, ch.writeType) ==
+                    BluetoothGatt.GATT_SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                run { ch.value = part; g.writeCharacteristic(ch) }
+            }
+            // Wait for this chunk to be sent before queuing the next, so Android
+            // doesn't drop it (one outstanding GATT write at a time).
+            if (ok) withTimeoutOrNull(800) { signal.await() }
+            else delay(15)   // queue was busy; small backoff and continue
             offset = end
         }
     }
