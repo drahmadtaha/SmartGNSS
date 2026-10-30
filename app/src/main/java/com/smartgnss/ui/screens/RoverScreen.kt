@@ -37,8 +37,16 @@ fun RoverScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         Column(Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Rover · Data Link", style = MaterialTheme.typography.titleLarge)
+            val ctx = androidx.compose.ui.platform.LocalContext.current
             androidx.compose.material3.OutlinedButton(
-                onClick = { vm.configureReceiver() },
+                onClick = {
+                    vm.configureReceiver()
+                    android.widget.Toast.makeText(
+                        ctx,
+                        "Sent UM982 config (UNLOGALL · MODE ROVER · NMEA). Check the Data Terminal for the receiver's OK replies.",
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Configure UM982 rover (mode + NMEA + heading)") }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -85,12 +85,26 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     val geoid = _geoid.asStateFlow()
     fun setGeoid(g: GeoidModel) { _geoid.value = g; settings.saveGeoid(g) }
 
-    /** NTRIP values to pre-fill the Corrections screen. */
-    val ntripDefaults = settings.loadNtrip()
-    fun saveNtrip(host: String, port: Int, mount: String, user: String, pass: String) {
+    /** Live NTRIP form state. Hoisted here so it survives screen navigation and
+     *  is persisted on every edit (the screen's own state was lost on leaving). */
+    private val _ntripForm = MutableStateFlow(
+        settings.loadNtrip()?.let {
+            NtripForm(it.host, it.port.toString(), it.mountPoint, it.username, it.password)
+        } ?: NtripForm()
+    )
+    val ntripForm = _ntripForm.asStateFlow()
+
+    fun updateNtripForm(f: NtripForm) {
+        _ntripForm.value = f
         settings.saveNtrip(
-            com.smartgnss.core.settings.NtripSaved(host, port, mount, user, pass)
+            com.smartgnss.core.settings.NtripSaved(
+                f.host.trim(), f.port.toIntOrNull() ?: 2101, f.mount.trim(), f.user.trim(), f.pass
+            )
         )
+    }
+
+    fun saveNtrip(host: String, port: Int, mount: String, user: String, pass: String) {
+        updateNtripForm(NtripForm(host, port.toString(), mount, user, pass))
     }
 
     /** Copy a picked geoid file into app storage, load (GTX/ISG/SGF), and persist it. */
@@ -300,6 +314,15 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() { disconnect() }
 }
+
+/** NTRIP connection form fields, kept as text so editing is lossless. */
+data class NtripForm(
+    val host: String = "",
+    val port: String = "2101",
+    val mount: String = "",
+    val user: String = "",
+    val pass: String = "",
+)
 
 /** Grid projection of a fix: East/North plus ellipsoidal and orthometric height. */
 data class GridResult(

@@ -72,12 +72,8 @@ fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     val ageMs = if (lastRtcmAt == 0L) Long.MAX_VALUE else (now - lastRtcmAt)
     val flowing = state == NtripState.STREAMING && ageMs < 4_000
 
-    val saved = vm.ntripDefaults
-    var host by remember { mutableStateOf(saved?.host ?: "") }
-    var port by remember { mutableStateOf(saved?.port?.toString() ?: "2101") }
-    var mount by remember { mutableStateOf(saved?.mountPoint ?: "") }
-    var user by remember { mutableStateOf(saved?.username ?: "") }
-    var pass by remember { mutableStateOf(saved?.password ?: "") }
+    // Hoisted into the ViewModel so the entries survive leaving/returning to the screen.
+    val form by vm.ntripForm.collectAsState()
     var showPass by remember { mutableStateOf(false) }
 
     Column(
@@ -110,11 +106,13 @@ fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
-                        host, { host = it }, label = { Text("IP / Domain") },
+                        form.host, { vm.updateNtripForm(form.copy(host = it)) },
+                        label = { Text("IP / Domain") },
                         singleLine = true, modifier = Modifier.weight(2f),
                     )
                     OutlinedTextField(
-                        port, { port = it.filter(Char::isDigit) }, label = { Text("Port") },
+                        form.port, { vm.updateNtripForm(form.copy(port = it.filter(Char::isDigit))) },
+                        label = { Text("Port") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f),
@@ -126,24 +124,28 @@ fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     OutlinedTextField(
-                        mount, { mount = it }, label = { Text("Mount point") },
+                        form.mount, { vm.updateNtripForm(form.copy(mount = it)) },
+                        label = { Text("Mount point") },
                         singleLine = true, modifier = Modifier.weight(1f),
                     )
                     OutlinedButton(
                         onClick = {
-                            vm.fetchMountPoints(host.trim(), port.toIntOrNull() ?: 2101, user.trim(), pass)
+                            vm.fetchMountPoints(form.host.trim(), form.port.toIntOrNull() ?: 2101,
+                                form.user.trim(), form.pass)
                         },
-                        enabled = host.isNotBlank(),
+                        enabled = form.host.isNotBlank(),
                     ) { Text("Get") }
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
-                        user, { user = it }, label = { Text("User") },
+                        form.user, { vm.updateNtripForm(form.copy(user = it)) },
+                        label = { Text("User") },
                         singleLine = true, modifier = Modifier.weight(1f),
                     )
                     OutlinedTextField(
-                        pass, { pass = it }, label = { Text("Password") },
+                        form.pass, { vm.updateNtripForm(form.copy(pass = it)) },
+                        label = { Text("Password") },
                         singleLine = true,
                         visualTransformation = if (showPass) VisualTransformation.None
                             else PasswordVisualTransformation(),
@@ -171,9 +173,11 @@ fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         mounts.take(80).forEach { mp ->
-                            val selected = mp.mount == mount
+                            val selected = mp.mount == form.mount
                             Card(
-                                Modifier.fillMaxWidth().clickable { mount = mp.mount },
+                                Modifier.fillMaxWidth().clickable {
+                                    vm.updateNtripForm(form.copy(mount = mp.mount))
+                                },
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (selected)
                                         MaterialTheme.colorScheme.primaryContainer
@@ -196,16 +200,16 @@ fun CorrectionsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         if (state == NtripState.IDLE || state == NtripState.ERROR) {
             Button(
                 onClick = {
-                    val p = port.toIntOrNull() ?: 2101
-                    vm.saveNtrip(host.trim(), p, mount.trim(), user.trim(), pass)
+                    val p = form.port.toIntOrNull() ?: 2101
+                    vm.saveNtrip(form.host.trim(), p, form.mount.trim(), form.user.trim(), form.pass)
                     vm.startNtrip(
                         NtripConfig(
-                            host = host.trim(), port = p, mountPoint = mount.trim(),
-                            username = user.trim(), password = pass,
+                            host = form.host.trim(), port = p, mountPoint = form.mount.trim(),
+                            username = form.user.trim(), password = form.pass,
                         )
                     )
                 },
-                enabled = host.isNotBlank() && mount.isNotBlank(),
+                enabled = form.host.isNotBlank() && form.mount.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Connect") }
         } else {
