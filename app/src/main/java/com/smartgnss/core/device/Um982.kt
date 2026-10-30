@@ -24,8 +24,10 @@ object Um982 {
         "GPGST 1",   // position-error statistics (HRMS / VRMS)
     )
 
-    /** Dual-antenna heading + pitch/roll output for tilt. */
-    const val HEADING_OUTPUT = "GPHPR 1"
+    /** Dual-antenna heading + pitch/roll output for tilt.
+     *  Unicore's rate field is the period in SECONDS, so 1 = 1 Hz, 0.1 = 10 Hz. */
+    const val HEADING_OUTPUT = "GPHPR 1"           // 1 Hz for normal use
+    const val HEADING_OUTPUT_10HZ = "GPHPR 0.1"    // 10 Hz for tilt measurement
 
     /** Enable the IMU so GGA carries the tilt-compensated position. */
     const val TILT_ENABLE = "CONFIG INS ENABLE"
@@ -48,6 +50,10 @@ object Um982 {
      *  automatically on connect so GGA/height starts flowing. */
     fun enableOutput(): List<String> = nmeaOutput + HEADING_OUTPUT
 
+    /** Turn tilt on/off. Tilt runs the heading/pitch/roll output at 10 Hz so the
+     *  pole-tilt angle is fresh at the moment a point is recorded; back to 1 Hz
+     *  when disabled. */
     fun tilt(on: Boolean): List<String> =
-        if (on) listOf(TILT_ENABLE, HEADING_OUTPUT) else listOf(TILT_DISABLE)
+        if (on) listOf(TILT_ENABLE, HEADING_OUTPUT_10HZ)
+        else listOf(TILT_DISABLE, HEADING_OUTPUT)
 }
