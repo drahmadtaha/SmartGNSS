@@ -262,6 +262,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
                 t.incoming.collect { bytes ->
                     extractGga(bytes)
                     appendRaw(bytes)
+                    detectTiltState(bytes)
                     parser.feed(bytes).forEach { _fix.value = it }
                 }
             }
@@ -271,6 +272,9 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
                 // and full position flow (the ICE app does this on connect too).
                 kotlinx.coroutines.delay(1200)
                 com.smartgnss.core.device.Um982.enableOutput().forEach { sendCommand(it) }
+                // Read the receiver's actual tilt state so we don't disable it.
+                kotlinx.coroutines.delay(300)
+                sendCommand("AT+TILT=?")
             } catch (_: Exception) { _link.value = LinkState.ERROR }
         }
     }
@@ -358,6 +362,23 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         val data = (line.trimEnd() + "\r\n").toByteArray(Charsets.US_ASCII)
         appendRaw("\n>> $line\n".toByteArray(Charsets.ISO_8859_1))
         viewModelScope.launch { transport?.write(data) }
+    }
+
+    /** Sync the app's tilt toggle to the receiver's real state from its
+     *  "+TILT=<on>,<pole>" reply, so SmartGNSS never silently disables a tilt
+     *  that was enabled/calibrated in another app. */
+    private val tiltRespBuf = StringBuilder()
+    private fun detectTiltState(bytes: ByteArray) {
+        tiltRespBuf.append(String(bytes, Charsets.ISO_8859_1))
+        if (tiltRespBuf.length > 400) tiltRespBuf.delete(0, tiltRespBuf.length - 400)
+        val t = tiltRespBuf.toString()
+        val i = t.lastIndexOf("+TILT=")
+        if (i >= 0 && i + 6 < t.length) {
+            when (t[i + 6]) {
+                '1' -> _tiltMode.value = true
+                '0' -> _tiltMode.value = false
+            }
+        }
     }
 
     private fun extractGga(bytes: ByteArray) {
