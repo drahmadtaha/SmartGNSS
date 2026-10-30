@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GpsFixed
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
 import com.smartgnss.core.nmea.FixQuality
 import com.smartgnss.core.transport.LinkState
 import com.smartgnss.ui.ReceiverViewModel
@@ -125,8 +127,7 @@ fun SolutionBar(vm: ReceiverViewModel) {
         }
         Spacer(Modifier.size(10.dp))
         Icon(
-            if (online) androidx.compose.material.icons.Icons.Filled.Wifi
-            else androidx.compose.material.icons.Icons.Filled.WifiOff,
+            if (online) Icons.Filled.Wifi else Icons.Filled.WifiOff,
             contentDescription = net.label,
             tint = if (online) SurveyColors.fixedGreen else SurveyColors.noFixRed,
             modifier = Modifier.size(18.dp),
