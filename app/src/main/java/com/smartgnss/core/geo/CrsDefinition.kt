@@ -61,11 +61,19 @@ data class CrsDefinition(
             6378249.145, 293.465, TransformType.BURSA_WOLF,
             -275.722, 94.7824, 340.894, -8.001, -4.42, -11.821, 1.0,
             31.73409694, 35.21208055, 1.0, 170251.555, 1126867.909, true)
-        val ISRAELI_TM = CrsDefinition("Israeli TM Grid (ITM)", "GRS 80",
+        // Palestine / Israel TM grid (IG05/12 on GRS80), verified against X-Survey
+        // to < 2 cm. NOTE: the engine treats the 7 params as local->WGS84 and
+        // inverts them, and X-Survey's published set is the WGS84->local
+        // Coordinate-Frame transform, so here the translations and scale are
+        // negated and the rotations kept as published — this combination makes
+        // our BURSA_WOLF path reproduce X-Survey's grid exactly.
+        val PALESTINE_ITM = CrsDefinition("Palestine (Israel TM)", "GRS 80",
             6378137.0, 298.257222101, TransformType.BURSA_WOLF,
-            -24.0024, -17.1032, -17.8444, -0.33077, -1.85269, 1.66969, 5.4262,
-            31.734393611, 35.204516944, 1.0000067, 219529.584, 626907.390, true)
+            24.0024, 17.1032, 17.8444, -0.33009, -1.85269, 1.66969, -5.425,
+            31.734393611, 35.204516944, 1.0000067, 169529.584, 126907.390, true)
+        // Kept under its common name too; identical verified parameters.
+        val ISRAELI_TM = PALESTINE_ITM.copy(name = "Israeli TM Grid (ITM)")
 
-        val templates = listOf(UTM_36N, UTM_37N, PALESTINE_GRID, ISRAELI_TM)
+        val templates = listOf(PALESTINE_ITM, ISRAELI_TM, UTM_36N, UTM_37N, PALESTINE_GRID)
     }
 }

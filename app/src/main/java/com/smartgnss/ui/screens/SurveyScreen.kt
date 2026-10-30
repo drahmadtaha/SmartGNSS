@@ -55,8 +55,10 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     val tilt by vm.tiltMode.collectAsState()
     var name by remember { mutableStateOf("PT1") }
     var code by remember { mutableStateOf("") }
-    var antH by remember { mutableStateOf("2.000") }
+    // Antenna/pole height is persisted in the ViewModel so it survives navigation.
+    var antH by remember { mutableStateOf("%.3f".format(vm.antennaHeight.value)) }
     var detail by remember { mutableStateOf<SurveyPoint?>(null) }
+    var showExport by remember { mutableStateOf(false) }
 
     Column(modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -93,13 +95,14 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(name, { name = it }, label = { Text("Name") }, modifier = Modifier.weight(1f))
             OutlinedTextField(code, { code = it }, label = { Text("Code") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(antH, { antH = it }, label = { Text("Ant (m)") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(antH, { antH = it; it.toDoubleOrNull()?.let(vm::setAntennaHeight) },
+                label = { Text("Ant (m)") }, modifier = Modifier.weight(1f))
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = {
-                    val p = vm.survey.record(name, code, fix, antH.toDoubleOrNull() ?: 0.0, tilt)
+                    val p = vm.survey.record(name, code, fix, antH.toDoubleOrNull() ?: vm.antennaHeight.value, tilt)
                     if (p != null) { name = nextName(name); Toast.makeText(context, "Recorded ${p.name}", Toast.LENGTH_SHORT).show() }
                     else Toast.makeText(context, "No position fix yet", Toast.LENGTH_SHORT).show()
                 },
@@ -107,22 +110,34 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                 modifier = Modifier.weight(1f),
             ) { Text("Record point") }
 
-            OutlinedButton(
-                onClick = {
-                    if (!vm.license.has(Feature.SURVEY_EXPORT)) {
-                        Toast.makeText(context, "Export not in your license", Toast.LENGTH_LONG).show()
-                    } else {
-                        val csv = vm.survey.toCsv { p -> crs.toGrid(p.latitude, p.longitude, p.altitude ?: 0.0) }
-                        val share = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/csv"
-                            putExtra(Intent.EXTRA_TEXT, csv)
-                            putExtra(Intent.EXTRA_SUBJECT, "SmartGNSS points")
-                        }
-                        context.startActivity(Intent.createChooser(share, "Export points"))
-                    }
-                },
-                enabled = points.isNotEmpty(),
-            ) { Text("Export") }
+            androidx.compose.foundation.layout.Box {
+                OutlinedButton(
+                    onClick = {
+                        if (!vm.license.has(Feature.SURVEY_EXPORT))
+                            Toast.makeText(context, "Export not in your license", Toast.LENGTH_LONG).show()
+                        else showExport = true
+                    },
+                    enabled = points.isNotEmpty(),
+                ) { Text("Export") }
+                androidx.compose.material3.DropdownMenu(
+                    expanded = showExport, onDismissRequest = { showExport = false }
+                ) {
+                    val proj: (SurveyPoint) -> Pair<Double, Double>? =
+                        { p -> crs.toGrid(p.latitude, p.longitude, p.altitude ?: 0.0) }
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("CSV (.csv)") },
+                        onClick = { showExport = false
+                            shareText(context, "points.csv", "text/csv", vm.survey.toCsv(proj)) })
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Text (.txt)") },
+                        onClick = { showExport = false
+                            shareText(context, "points.txt", "text/plain", vm.survey.toTxt(proj)) })
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("AutoCAD (.dxf)") },
+                        onClick = { showExport = false
+                            shareText(context, "points.dxf", "application/dxf", vm.survey.toDxf(proj)) })
+                }
+            }
         }
 
         com.smartgnss.ui.theme.SectionHeader("Collected points (${points.size})")
@@ -167,7 +182,8 @@ private fun PointDetailDialog(p: SurveyPoint, en: Pair<Double, Double>, onClose:
                 DetailRow("Longitude", "%.8f°".format(p.longitude))
                 DetailRow("East", "%.4f m".format(en.first))
                 DetailRow("North", "%.4f m".format(en.second))
-                DetailRow("Ortho H", p.altitude?.let { "%.4f m".format(it) } ?: "—")
+                DetailRow("Ground elev", p.altitude?.let { "%.4f m".format(it - p.antennaHeight) } ?: "—")
+                DetailRow("Measured H", p.altitude?.let { "%.4f m".format(it) } ?: "—")
                 DetailRow("Antenna h", "%.3f m".format(p.antennaHeight))
                 DetailRow("Solution", p.quality.label)
                 DetailRow("Satellites", "${p.satellitesUsed} used / ${p.satellitesTracked} tracked")
@@ -191,6 +207,26 @@ private fun DetailRow(label: String, value: String) {
         Text(label, style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+    }
+}
+
+/** Write [content] to a cache file and open the share sheet for it. */
+private fun shareText(
+    context: android.content.Context, filename: String, mime: String, content: String,
+) {
+    runCatching {
+        val f = java.io.File(context.cacheDir, filename)
+        f.writeText(content)
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context, "${context.packageName}.fileprovider", f
+        )
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "Smart GNSS points")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(send, "Share $filename"))
     }
 }
 

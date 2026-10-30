@@ -30,8 +30,16 @@ import kotlinx.coroutines.launch
 class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
 
     val license = LicenseManager(app)
-    val survey = SurveyStore()
+    val survey = SurveyStore(app)
     val projects = com.smartgnss.core.project.ProjectStore(app)
+
+    init {
+        // Load the open project's points, and switch point sets when it changes.
+        survey.loadProject(projects.current.value)
+        viewModelScope.launch {
+            projects.current.collect { survey.loadProject(it) }
+        }
+    }
 
     private val parser = NmeaParser()
 
@@ -76,7 +84,15 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     val settings = com.smartgnss.core.settings.SettingsStore(app)
 
     private val _crs = MutableStateFlow(
-        settings.loadCrs()?.let { CoordinateSystem(it) } ?: CoordinateSystem.UTM_36N
+        settings.loadCrs()?.let { s ->
+            // Auto-heal: if the saved system shares a name with a built-in
+            // template, use the current (corrected) template parameters. This
+            // replaces an earlier, less-accurate "Palestine" saved before the
+            // X-Survey-verified parameters were added.
+            CoordinateSystem(
+                com.smartgnss.core.geo.CrsDefinition.templates.firstOrNull { it.name == s.name } ?: s
+            )
+        } ?: CoordinateSystem.DEFAULT
     )
     val crs = _crs.asStateFlow()
     fun setCrs(c: CoordinateSystem) { _crs.value = c; settings.saveCrs(c.def) }
@@ -84,6 +100,12 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     private val _geoid = MutableStateFlow(settings.loadGeoid())
     val geoid = _geoid.asStateFlow()
     fun setGeoid(g: GeoidModel) { _geoid.value = g; settings.saveGeoid(g) }
+
+    /** Antenna / pole height (m), subtracted from measured heights to get the
+     *  ground mark elevation. Persisted so it survives restarts. */
+    private val _antennaHeight = MutableStateFlow(settings.loadAntennaHeight())
+    val antennaHeight = _antennaHeight.asStateFlow()
+    fun setAntennaHeight(h: Double) { _antennaHeight.value = h; settings.saveAntennaHeight(h) }
 
     /** Live NTRIP form state. Hoisted here so it survives screen navigation and
      *  is persisted on every edit (the screen's own state was lost on leaving). */
@@ -151,8 +173,11 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         val hEllipsoidal = (fix.altitudeMsl ?: 0.0) + (fix.geoidSep ?: 0.0)
         val (e, n) = _crs.value.toGrid(lat, lon, hEllipsoidal)
         val sep = _geoid.value.separation(lat, lon)
-        val ortho = if (sep != null) hEllipsoidal - sep else null
-        return GridResult(e, n, hEllipsoidal, ortho)
+        // Reduce heights to the ground mark by removing the antenna/pole height.
+        val antH = _antennaHeight.value
+        val groundEllip = hEllipsoidal - antH
+        val ortho = if (sep != null) hEllipsoidal - sep - antH else null
+        return GridResult(e, n, groundEllip, ortho)
     }
 
     fun fetchMountPoints(host: String, port: Int, user: String, pass: String) {

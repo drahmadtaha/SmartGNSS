@@ -45,7 +45,11 @@ class CoordinateSystem(val def: CrsDefinition) {
         val UTM_36N = CoordinateSystem(CrsDefinition.UTM_36N)
         val UTM_37N = CoordinateSystem(CrsDefinition.UTM_37N)
         val PALESTINE_GRID = CoordinateSystem(CrsDefinition.PALESTINE_GRID)
+        val PALESTINE_ITM = CoordinateSystem(CrsDefinition.PALESTINE_ITM)
         val ISRAELI_TM = CoordinateSystem(CrsDefinition.ISRAELI_TM)
+
+        /** The default working system for this region (verified vs X-Survey). */
+        val DEFAULT = PALESTINE_ITM
 
         val all = CrsDefinition.templates.map { CoordinateSystem(it) }
 

@@ -66,6 +66,12 @@ class SettingsStore(context: Context) {
             .apply()
     }
 
+    // --- Antenna / pole height ----------------------------------------------
+    fun saveAntennaHeight(h: Double) {
+        prefs.edit().putFloat(KEY_ANT_H, h.toFloat()).apply()
+    }
+    fun loadAntennaHeight(): Double = prefs.getFloat(KEY_ANT_H, 2.0f).toDouble()
+
     fun loadNtrip(): NtripSaved? {
         val host = prefs.getString(KEY_N_HOST, null) ?: return null
         return NtripSaved(
@@ -87,5 +93,6 @@ class SettingsStore(context: Context) {
         private const val KEY_N_MOUNT = "ntrip_mount"
         private const val KEY_N_USER = "ntrip_user"
         private const val KEY_N_PASS = "ntrip_pass"
+        private const val KEY_ANT_H = "antenna_height"
     }
 }
