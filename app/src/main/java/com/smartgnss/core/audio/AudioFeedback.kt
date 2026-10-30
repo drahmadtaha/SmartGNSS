@@ -1,9 +1,12 @@
 package com.smartgnss.core.audio
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioManager
+import android.media.SoundPool
 import android.media.ToneGenerator
 import android.speech.tts.TextToSpeech
+import com.smartgnss.R
 import java.util.Locale
 
 /**
@@ -16,12 +19,22 @@ class AudioFeedback(context: Context) {
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var tone: ToneGenerator? = null
+    private var pool: SoundPool? = null
+    private var clickSound = 0
     var soundEnabled = true
     var voiceEnabled = true
 
     init {
         runCatching {
             tone = ToneGenerator(AudioManager.STREAM_MUSIC, 90)
+        }
+        runCatching {
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            pool = SoundPool.Builder().setMaxStreams(4).setAudioAttributes(attrs).build()
+            clickSound = pool?.load(context.applicationContext, R.raw.click, 1) ?: 0
         }
         runCatching {
             tts = TextToSpeech(context.applicationContext) { status ->
@@ -31,8 +44,14 @@ class AudioFeedback(context: Context) {
         }
     }
 
-    /** Light click for buttons. */
-    fun click() = tone(ToneGenerator.TONE_PROP_BEEP, 35)
+    /** Light click for buttons — plays the bundled click sound. */
+    fun click() {
+        if (!soundEnabled) return
+        val p = pool
+        if (p != null && clickSound != 0) {
+            runCatching { p.play(clickSound, 0.9f, 0.9f, 1, 0, 1f) }
+        } else tone(ToneGenerator.TONE_PROP_BEEP, 35)
+    }
 
     /** Confirmation tone when a point is recorded. */
     fun measure() = tone(ToneGenerator.TONE_PROP_ACK, 150)
@@ -57,6 +76,7 @@ class AudioFeedback(context: Context) {
     fun release() {
         runCatching { tts?.shutdown() }
         runCatching { tone?.release() }
-        tts = null; tone = null
+        runCatching { pool?.release() }
+        tts = null; tone = null; pool = null
     }
 }

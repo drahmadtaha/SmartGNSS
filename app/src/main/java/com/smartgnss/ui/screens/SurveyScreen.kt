@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -182,38 +183,86 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     if (showTiltCal) TiltCalibrationDialog(vm) { showTiltCal = false }
 }
 
-/** Guided IMU tilt initialization (the receiver's pole-tilt needs motion to align). */
+/** Guided IMU tilt initialization with a live tilt-geometry diagram and results. */
 @Composable
 private fun TiltCalibrationDialog(vm: ReceiverViewModel, onClose: () -> Unit) {
     val fix by vm.fix.collectAsState()
+    val poleLen = vm.effectiveAntennaHeight()
+    val alpha = fix.tiltAngleDeg
+    val ready = fix.tiltValid && alpha != null
+    // Horizontal lean offset Δa = h_GNSS · sin(α).
+    val deltaA = alpha?.let { poleLen * kotlin.math.sin(Math.toRadians(it)) }
+    val drawAngle = (alpha ?: 20.0).coerceIn(0.0, 60.0)
+
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text("Tilt initialization") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Single-antenna tilt uses the IMU, which must be aligned by motion " +
-                    "before use. Keep a Fixed solution throughout.",
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Hold the pole vertical and steady, then gently rotate the receiver " +
+                    "and walk a few metres until the IMU aligns. Keep an RTK Fixed solution.",
                     style = MaterialTheme.typography.bodySmall)
-                Text("1. Hold the pole vertical and still, then tap Step 1.",
-                    style = MaterialTheme.typography.bodyMedium)
-                Button(onClick = { vm.beepClick(); vm.tiltCalibrationStep(1) },
-                    modifier = Modifier.fillMaxWidth()) { Text("Send Step 1 (hold vertical)") }
-                Text("2. Gently rotate/shake the receiver and walk ~5 m, then tap Step 2.",
-                    style = MaterialTheme.typography.bodyMedium)
-                Button(onClick = { vm.beepClick(); vm.tiltCalibrationStep(2) },
-                    modifier = Modifier.fillMaxWidth()) { Text("Send Step 2 (after motion)") }
-                Text("Tilt status: " + if (fix.tiltValid) "READY (${fix.tiltAngleDeg?.let { "%.1f°".format(it) } ?: "—"})"
-                    else "not aligned yet",
+
+                TiltDiagram(drawAngle, ready, Modifier.fillMaxWidth().height(150.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.smartgnss.ui.theme.StatTile("Tilt α",
+                        alpha?.let { "%.1f°".format(it) } ?: "—", Modifier.weight(1f),
+                        accent = if (ready) SurveyColors.fixedGreen else null)
+                    com.smartgnss.ui.theme.StatTile("Offset Δa",
+                        deltaA?.let { "%.3f m".format(it) } ?: "—", Modifier.weight(1f))
+                    com.smartgnss.ui.theme.StatTile("h_GNSS",
+                        "%.3f m".format(poleLen), Modifier.weight(1f))
+                }
+
+                Text(
+                    if (ready) "IMU aligned — tilt is live. You can measure while tilted."
+                    else "Status: aligning… (no tilt value yet). If it stays blank, the " +
+                        "receiver isn't sending tilt data — share a Data Terminal log.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (fix.tiltValid) SurveyColors.fixedGreen else MaterialTheme.colorScheme.error)
-                Text("Watch the Data Terminal for the receiver's responses and share the log " +
-                    "if tilt stays unaligned.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    color = if (ready) SurveyColors.fixedGreen else MaterialTheme.colorScheme.error,
+                )
             }
         },
         confirmButton = { TextButton(onClick = onClose) { Text("Done") } },
     )
+}
+
+/** Small diagram: vertical reference, tilted pole at angle α, antenna, ground. */
+@Composable
+private fun TiltDiagram(angleDeg: Double, ready: Boolean, modifier: Modifier = Modifier) {
+    val blue = SurveyColors.brandBlue
+    val green = SurveyColors.fixedGreen
+    val gray = androidx.compose.ui.graphics.Color(0xFF9AA0A6)
+    androidx.compose.foundation.Canvas(modifier) {
+        val cx = size.width / 2f
+        val gy = size.height * 0.9f
+        val L = size.height * 0.78f
+        val a = Math.toRadians(angleDeg)
+        // ground line
+        drawLine(gray, androidx.compose.ui.geometry.Offset(cx - size.width * 0.32f, gy),
+            androidx.compose.ui.geometry.Offset(cx + size.width * 0.32f, gy), 3f)
+        // vertical reference (dashed)
+        drawLine(gray, androidx.compose.ui.geometry.Offset(cx, gy),
+            androidx.compose.ui.geometry.Offset(cx, gy - L), 3f,
+            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f)))
+        // tilted pole
+        val ex = cx + (L * kotlin.math.sin(a)).toFloat()
+        val ey = gy - (L * kotlin.math.cos(a)).toFloat()
+        val pole = if (ready) green else blue
+        drawLine(pole, androidx.compose.ui.geometry.Offset(cx, gy),
+            androidx.compose.ui.geometry.Offset(ex, ey), 11f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        drawCircle(pole, 15f, androidx.compose.ui.geometry.Offset(ex, ey))   // antenna
+        // angle arc at the ground pivot
+        val r = L * 0.3f
+        drawArc(pole, startAngle = -90f, sweepAngle = angleDeg.toFloat(), useCenter = false,
+            topLeft = androidx.compose.ui.geometry.Offset(cx - r, gy - r),
+            size = androidx.compose.ui.geometry.Size(2 * r, 2 * r),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
+        drawCircle(androidx.compose.ui.graphics.Color(0xFF1A2330), 6f,
+            androidx.compose.ui.geometry.Offset(cx, gy))
+    }
 }
 
 @Composable
