@@ -204,6 +204,8 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         _tiltMode.value = on
         val poleMm = (_antennaHeight.value * 1000).toInt().coerceIn(100, 6000)
         com.smartgnss.core.device.Um982.tilt(on, poleMm).forEach { sendCommand(it) }
+        // Read back the state and device type so the responses show in the terminal.
+        sendCommand("AT+TILT=?")
     }
 
     /** Send the UM982 rover + NMEA + heading configuration to the receiver. */

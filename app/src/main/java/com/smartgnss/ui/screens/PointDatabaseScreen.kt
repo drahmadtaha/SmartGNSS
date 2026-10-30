@@ -52,6 +52,7 @@ fun PointDatabaseScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     val crs by vm.crs.collectAsState()
     val fix by vm.fix.collectAsState()
     var showExport by remember { mutableStateOf(false) }
+    var detail by remember { mutableStateOf<SurveyPoint?>(null) }
 
     val importer = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -77,7 +78,7 @@ fun PointDatabaseScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(points.reversed()) { p ->
                 val en = proj(p)
-                Card(Modifier.fillMaxWidth()) {
+                Card(Modifier.fillMaxWidth().clickable { vm.beepClick(); detail = p }) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically,
@@ -145,6 +146,10 @@ fun PointDatabaseScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+
+    detail?.let { p ->
+        PointDetailDialog(p, crs.toGrid(p.latitude, p.longitude, p.altitude ?: 0.0)) { detail = null }
     }
 }
 

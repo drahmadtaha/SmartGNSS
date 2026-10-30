@@ -19,7 +19,7 @@ object Um982 {
     val nmeaOutput = listOf(
         "GPGGA 1",   // position, fix quality, HDOP, altitude
         "GPGSA 1",   // DOP + active satellites
-        "GPGSV 1",   // satellites in view + SNR
+        "GPGSV 5",   // satellites in view + SNR (every 5 s — keeps the terminal readable)
         "GPRMC 1",   // date/time, speed, course
         "GPGST 1",   // position-error statistics (HRMS / VRMS)
     )

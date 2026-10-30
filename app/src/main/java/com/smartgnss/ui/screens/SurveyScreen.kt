@@ -266,7 +266,7 @@ private fun TiltDiagram(angleDeg: Double, ready: Boolean, modifier: Modifier = M
 }
 
 @Composable
-private fun PointDetailDialog(p: SurveyPoint, en: Pair<Double, Double>, onClose: () -> Unit) {
+internal fun PointDetailDialog(p: SurveyPoint, en: Pair<Double, Double>, onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
         confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
@@ -277,6 +277,7 @@ private fun PointDetailDialog(p: SurveyPoint, en: Pair<Double, Double>, onClose:
                 DetailRow("Date / time", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(p.timestampMs)))
                 DetailRow("Latitude", "%.8f°".format(p.latitude))
                 DetailRow("Longitude", "%.8f°".format(p.longitude))
+                DetailRow("Altitude (MSL)", p.altitude?.let { "%.4f m".format(it) } ?: "—")
                 DetailRow("East", "%.4f m".format(en.first))
                 DetailRow("North", "%.4f m".format(en.second))
                 DetailRow("Ground elev", p.altitude?.let { "%.4f m".format(it - p.antennaHeight) } ?: "—")
