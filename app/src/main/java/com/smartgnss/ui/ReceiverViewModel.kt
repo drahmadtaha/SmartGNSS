@@ -284,12 +284,18 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         val star = s.indexOf('*')
         if (star < 2 || star + 3 > s.length) return null
         val body = s.substring(1, star)
-        if (!body.contains("GGA,")) return null
+        if (body.length < 6 || !body.contains("GGA,")) return null
         var cs = 0
         for (ch in body) cs = cs xor ch.code
         val given = s.substring(star + 1, star + 3).toIntOrNull(16) ?: return null
         if (cs != given) return null
-        return s.substring(0, star + 3)
+        // Normalise the talker to GP: many VRS casters only parse "$GPGGA" and
+        // silently ignore "$GNGGA"/"$GLGGA" (which the UM982 sends). Recompute
+        // the checksum for the rewritten sentence.
+        val gpBody = "GP" + body.substring(2)   // e.g. GNGGA,... -> GPGGA,...
+        var cs2 = 0
+        for (ch in gpBody) cs2 = cs2 xor ch.code
+        return "\$%s*%02X".format(gpBody, cs2)
     }
 
     override fun onCleared() { disconnect() }
