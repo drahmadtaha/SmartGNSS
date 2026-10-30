@@ -76,6 +76,7 @@ fun DataTerminalScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             AssistChip(onClick = { vm.configureReceiver() }, label = { Text("Configure UM982") })
             AssistChip(onClick = { vm.sendCommand("GPGGA 1") }, label = { Text("GPGGA 1") })
             AssistChip(onClick = { vm.sendCommand("MODE ROVER") }, label = { Text("MODE ROVER") })
+            AssistChip(onClick = { vm.sendCommand("UNLOGALL") }, label = { Text("UNLOGALL") })
             AssistChip(onClick = { vm.sendCommand("VERSION") }, label = { Text("VERSION") })
             AssistChip(onClick = { vm.sendCommand("SAVECONFIG") }, label = { Text("SAVECONFIG") })
         }

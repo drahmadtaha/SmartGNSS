@@ -212,7 +212,11 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
                         if (g != null) {
                             client.sendGga(g)
                             _ggaUplinks.value += 1
-                            appendRaw(">> [GGA uplink to caster]\n".toByteArray(Charsets.ISO_8859_1))
+                            // Show the exact (cleaned) GGA only on the first few sends.
+                            if (_ggaUplinks.value <= 2)
+                                appendRaw(">> GGA uplink: $g\n".toByteArray(Charsets.ISO_8859_1))
+                            else
+                                appendRaw(">> [GGA uplink to caster]\n".toByteArray(Charsets.ISO_8859_1))
                         } else {
                             appendRaw(">> [streaming but no GGA from receiver yet]\n".toByteArray(Charsets.ISO_8859_1))
                         }
@@ -253,14 +257,39 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         for (b in bytes) {
             val c = b.toInt().toChar()
             if (c == '\n' || c == '\r') {
-                val line = ggaBuffer.toString()
-                if (line.contains("GGA")) lastGga = line
+                cleanGga(ggaBuffer.toString())?.let { lastGga = it }
                 ggaBuffer.setLength(0)
             } else {
                 ggaBuffer.append(c)
-                if (ggaBuffer.length > 200) ggaBuffer.setLength(0)
+                // The UM982 interleaves binary logs with NMEA; keep only the tail
+                // from the last '$' so a GGA that follows binary isn't lost.
+                if (ggaBuffer.length > 1024) {
+                    val d = ggaBuffer.lastIndexOf("$")
+                    if (d > 0) ggaBuffer.delete(0, d) else ggaBuffer.setLength(0)
+                }
             }
         }
+    }
+
+    /**
+     * Pull a clean, checksum-valid GGA sentence out of a line that may carry a
+     * binary prefix (UM982 binary logs). Mirrors what the receiver's own apps do:
+     * take from the last '$' and validate before sending to the caster — a VRS
+     * caster silently ignores a GGA with junk in front or a bad checksum.
+     */
+    private fun cleanGga(line: String): String? {
+        val dollar = line.lastIndexOf('$')
+        if (dollar < 0) return null
+        val s = line.substring(dollar)
+        val star = s.indexOf('*')
+        if (star < 2 || star + 3 > s.length) return null
+        val body = s.substring(1, star)
+        if (!body.contains("GGA,")) return null
+        var cs = 0
+        for (ch in body) cs = cs xor ch.code
+        val given = s.substring(star + 1, star + 3).toIntOrNull(16) ?: return null
+        if (cs != given) return null
+        return s.substring(0, star + 3)
     }
 
     override fun onCleared() { disconnect() }

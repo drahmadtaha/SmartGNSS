@@ -36,9 +36,13 @@ object Um982 {
     /** Persist the current configuration across power cycles. */
     const val SAVE = "SAVECONFIG"
 
-    /** Full configuration sequence for a rover with NMEA + heading. */
+    /** Stop all current output logs (clears binary logs that flood the BT link). */
+    const val UNLOG_ALL = "UNLOGALL"
+
+    /** Full configuration sequence for a rover: clear binary logs, set rover mode,
+     *  then enable only the NMEA + heading sentences the app needs. */
     fun configureRover(): List<String> =
-        listOf(MODE_ROVER) + nmeaOutput + HEADING_OUTPUT
+        listOf(UNLOG_ALL, MODE_ROVER) + nmeaOutput + HEADING_OUTPUT
 
     /** Just turn on the NMEA + heading output (no mode change) — safe to send
      *  automatically on connect so GGA/height starts flowing. */
