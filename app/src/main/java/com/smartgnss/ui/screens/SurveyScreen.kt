@@ -59,7 +59,8 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     val points by vm.survey.points.collectAsState()
     val crs by vm.crs.collectAsState()
     val tilt by vm.tiltMode.collectAsState()
-    var name by remember { mutableStateOf("PT1") }
+    // Start at the next free number so we never reuse an existing point name.
+    var name by remember { mutableStateOf(nextFreeName(vm.survey.points.value, "PT1")) }
     var code by remember { mutableStateOf("") }
     // Antenna/pole height is persisted in the ViewModel so it survives navigation.
     var antH by remember { mutableStateOf("%.3f".format(vm.antennaHeight.value)) }
@@ -108,6 +109,15 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                         }
                         Pill(if (tilt) "TILT" else "NORMAL",
                             if (tilt) SurveyColors.fixedGreen else SurveyColors.singleGray)
+                        androidx.compose.material3.Switch(
+                            checked = tilt,
+                            onCheckedChange = { on ->
+                                vm.beepClick()
+                                vm.setTiltMode(on)
+                                if (on) { vm.enableTiltOnReceiver(); showTiltCal = true }
+                            },
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
                     }
                 }
             }
@@ -174,7 +184,8 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                             val p = vm.recordPoint(name, code)
                             if (p != null) {
                                 vm.beepMeasure()
-                                name = nextName(name)
+                                // Continue numbering from the highest existing point.
+                                name = nextFreeName(vm.survey.points.value, name)
                                 Toast.makeText(context, "Recorded ${p.name}", Toast.LENGTH_SHORT).show()
                             } else {
                                 vm.beepClick()
@@ -182,7 +193,9 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                             }
                         },
                 ) {
-                    Icon(Icons.Filled.GpsFixed, contentDescription = "Measure point",
+                    Icon(
+                        if (tilt) Icons.Filled.ScreenRotation else Icons.Filled.GpsFixed,
+                        contentDescription = "Measure point",
                         tint = androidx.compose.ui.graphics.Color.White,
                         modifier = Modifier.size(30.dp))
                 }
@@ -426,4 +439,23 @@ private fun nextName(name: String): String {
     val width = m.groupValues[2].length
     val next = (m.groupValues[2].toInt() + 1).toString().padStart(width, '0')
     return "${m.groupValues[1]}$next"
+}
+
+/**
+ * Next unused point name: takes the prefix of [current] and returns prefix +
+ * (highest existing number for that prefix + 1), skipping any name already in
+ * [points]. So measuring never reuses a number even across sessions / the DB.
+ */
+fun nextFreeName(points: List<SurveyPoint>, current: String): String {
+    val m = Regex("^(.*?)(\\d+)$").find(current)
+    val prefix = m?.groupValues?.get(1) ?: current
+    val width = m?.groupValues?.get(2)?.length ?: 1
+    val taken = points.map { it.name }.toHashSet()
+    val re = Regex("^${Regex.escape(prefix)}(\\d+)$")
+    var maxN = m?.groupValues?.get(2)?.toIntOrNull() ?: 0
+    points.forEach { p -> re.find(p.name)?.groupValues?.get(1)?.toIntOrNull()?.let { if (it >= maxN) maxN = it } }
+    var n = maxN + 1
+    var candidate = "$prefix${n.toString().padStart(width, '0')}"
+    while (taken.contains(candidate)) { n++; candidate = "$prefix${n.toString().padStart(width, '0')}" }
+    return candidate
 }

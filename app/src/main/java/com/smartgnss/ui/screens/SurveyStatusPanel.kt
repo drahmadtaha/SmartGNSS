@@ -75,19 +75,20 @@ fun SurveyStatusPanel(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 
             Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
-            // --- Two-column geographic / grid block ---------------------------
-            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    CoordRow("B", dispLat?.let { dmsLat(it) } ?: "—")
-                    CoordRow("L", dispLon?.let { dmsLon(it) } ?: "—")
-                    CoordRow("H", grid?.ellipsoidalHeight?.let { "%.3f".format(it) } ?: "—", "m")
-                }
-                Spacer(Modifier.padding(start = 6.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    CoordRow("E", grid?.east?.let { "%.3f".format(it) } ?: "—", "m")
-                    CoordRow("N", grid?.north?.let { "%.3f".format(it) } ?: "—", "m")
-                    CoordRow("Elev", grid?.orthometricHeight?.let { "%.3f".format(it) } ?: "—", "m")
-                }
+            // --- Geographic (small) + grid (large) rows, aligned ------------
+            // Surveyors read the grid E/N/Elev, so those are the large primary
+            // values; lat/lon/ellipsoidal (B/L/H) are the small secondary set.
+            Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CoordPairRow(
+                    "B", dispLat?.let { dmsLat(it) } ?: "—", null,
+                    "E", grid?.east?.let { "%.3f".format(it) } ?: "—", "m")
+                CoordPairRow(
+                    "L", dispLon?.let { dmsLon(it) } ?: "—", null,
+                    "N", grid?.north?.let { "%.3f".format(it) } ?: "—", "m")
+                CoordPairRow(
+                    "H", grid?.ellipsoidalHeight?.let { "%.3f".format(it) } ?: "—", "m",
+                    "Elev", grid?.orthometricHeight?.let { "%.3f".format(it) } ?: "—", "m")
             }
 
             // --- Tilt rows (X-Survey "Tilt Angle" / "Projection Angle") -------
@@ -122,24 +123,40 @@ private fun HeaderStat(label: String, value: String) {
     }
 }
 
-/** One column line: fixed-width bold label (B/L/H/E/N/Elev) + single-line value
- *  + unit, all on one row. Value font is sized so a full DMS string (incl. the
- *  N/E hemisphere) fits a half-width column without clipping. */
+/** One aligned line with a small geographic value on the left (B/L/H) and a
+ *  large grid value on the right (E/N/Elev), sharing the same baseline row. */
 @Composable
-private fun CoordRow(label: String, value: String, unit: String? = null) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        Text(label, style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.width(30.dp))
-        Text(value, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1, softWrap = false,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Visible)
-        if (unit != null) Text(" $unit", style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 1.dp, start = 2.dp))
+private fun CoordPairRow(
+    lLabel: String, lValue: String, lUnit: String?,
+    rLabel: String, rValue: String, rUnit: String?,
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+        // Left — small secondary (lat/lon/ellipsoidal).
+        Row(Modifier.weight(0.92f), verticalAlignment = Alignment.Bottom) {
+            Text(lLabel, style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.width(16.dp))
+            Text(lValue, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, softWrap = false)
+            if (lUnit != null) Text(lUnit, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 1.dp, bottom = 1.dp))
+        }
+        Spacer(Modifier.width(6.dp))
+        // Right — large primary (grid E/N/Elev).
+        Row(Modifier.weight(1.08f), verticalAlignment = Alignment.Bottom) {
+            Text(rLabel, style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
+                maxLines = 1, softWrap = false,
+                modifier = Modifier.width(38.dp))
+            Text(rValue, fontSize = 20.sp, fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1, softWrap = false)
+            if (rUnit != null) Text(" $rUnit", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 1.dp, bottom = 3.dp))
+        }
     }
 }
 

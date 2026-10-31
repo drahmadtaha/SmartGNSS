@@ -1,6 +1,7 @@
 package com.smartgnss.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,9 +37,12 @@ import kotlin.math.sin
 fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     val fix by vm.fix.collectAsState()
     val target by vm.stakeTarget.collectAsState()
+    val crs by vm.crs.collectAsState()
+    val points by vm.survey.points.collectAsState()
     var name by remember { mutableStateOf("STK1") }
     var east by remember { mutableStateOf("") }
     var north by remember { mutableStateOf("") }
+    var showPicker by remember { mutableStateOf(false) }
 
     val cur = vm.gridFor(fix)
 
@@ -56,14 +60,60 @@ fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             OutlinedTextField(north, { north = it }, label = { Text("Target North (m)") },
                 modifier = Modifier.weight(1f))
         }
-        Button(
-            onClick = {
-                val e = east.toDoubleOrNull(); val n = north.toDoubleOrNull()
-                if (e != null && n != null) vm.setStakeTarget(StakeTarget(name, e, n))
-            },
-            enabled = east.toDoubleOrNull() != null && north.toDoubleOrNull() != null,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Set target") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    val e = east.toDoubleOrNull(); val n = north.toDoubleOrNull()
+                    if (e != null && n != null) vm.setStakeTarget(StakeTarget(name, e, n))
+                },
+                enabled = east.toDoubleOrNull() != null && north.toDoubleOrNull() != null,
+                modifier = Modifier.weight(1f),
+            ) { Text("Set target") }
+            androidx.compose.material3.OutlinedButton(
+                onClick = { showPicker = true },
+                enabled = points.isNotEmpty(),
+                modifier = Modifier.weight(1f),
+            ) { Text("From database") }
+        }
+
+        if (showPicker) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showPicker = false },
+                title = { Text("Select target from database") },
+                text = {
+                    if (points.isEmpty()) Text("No saved points.")
+                    else androidx.compose.foundation.lazy.LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        androidx.compose.foundation.lazy.items(points.reversed()) { p ->
+                            val en = crs.toGrid(p.latitude, p.longitude, p.ellipsoidalHeight ?: p.altitude ?: 0.0)
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clickable {
+                                        vm.beepClick()
+                                        name = p.name
+                                        east = "%.4f".format(en.first)
+                                        north = "%.4f".format(en.second)
+                                        vm.setStakeTarget(StakeTarget(p.name, en.first, en.second))
+                                        showPicker = false
+                                    }
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(p.name, style = MaterialTheme.typography.bodyLarge)
+                                Text("E %.3f  N %.3f".format(en.first, en.second),
+                                    fontFamily = FontFamily.Monospace,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = { showPicker = false }) { Text("Close") }
+                },
+            )
+        }
 
         val t = target
         if (t == null) {
