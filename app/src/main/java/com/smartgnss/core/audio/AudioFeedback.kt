@@ -21,6 +21,9 @@ class AudioFeedback(context: Context) {
     private var tone: ToneGenerator? = null
     private var pool: SoundPool? = null
     private var clickSound = 0
+    private var proxSound = 0      // btn_trim_centre: approach beep (< 3 m)
+    private var warnSound = 0      // sce_waring: looped while on point (< 3 cm)
+    private var warnStreamId = 0
     var soundEnabled = true
     var voiceEnabled = true
 
@@ -42,7 +45,10 @@ class AudioFeedback(context: Context) {
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
             pool = SoundPool.Builder().setMaxStreams(4).setAudioAttributes(attrs).build()
-            clickSound = pool?.load(context.applicationContext, R.raw.click, 1) ?: 0
+            val app = context.applicationContext
+            clickSound = pool?.load(app, R.raw.click, 1) ?: 0
+            proxSound = pool?.load(app, R.raw.btn_trim_centre, 1) ?: 0
+            warnSound = pool?.load(app, R.raw.sce_waring, 1) ?: 0
         }
         runCatching {
             tts = TextToSpeech(context.applicationContext) { status ->
@@ -83,6 +89,31 @@ class AudioFeedback(context: Context) {
             else -> ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD to 160
         }
         runCatching { t.startTone(type, ms) }
+    }
+
+    /** Stakeout approach beep (btn_trim_centre) — call repeatedly while
+     *  3 cm ≤ distance < 3 m. [volume] 0..1 lets the caller make it louder (and
+     *  the cadence faster) as the point gets closer. */
+    fun stakeApproach(volume: Float = 1f) {
+        if (!soundEnabled) return
+        val p = pool ?: return
+        val v = volume.coerceIn(0.2f, 1f)
+        if (proxSound != 0) runCatching { p.play(proxSound, v, v, 1, 0, 1f) }
+    }
+
+    /** Start looping the on-point warning (sce_waring) and keep it playing until
+     *  [stakeOnPointStop]. No-op if already looping. */
+    fun stakeOnPointStart() {
+        if (!soundEnabled) return
+        val p = pool ?: return
+        if (warnStreamId != 0 || warnSound == 0) return
+        warnStreamId = runCatching { p.play(warnSound, 1f, 1f, 2, -1, 1f) }.getOrDefault(0)
+    }
+
+    /** Stop the looping on-point warning. */
+    fun stakeOnPointStop() {
+        val p = pool ?: return
+        if (warnStreamId != 0) { runCatching { p.stop(warnStreamId) }; warnStreamId = 0 }
     }
 
     /** "On point" loud double tone for stakeout success (alarm stream). */

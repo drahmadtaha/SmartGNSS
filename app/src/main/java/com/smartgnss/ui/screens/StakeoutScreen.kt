@@ -101,10 +101,8 @@ fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     val cutFill = if (t?.designElev != null && curElev != null) curElev - t.designElev!! else null
     val onPoint = dist != null && dist < 0.03
 
-    Column(modifier.fillMaxSize()
-        .verticalScroll(rememberScrollState())
-        .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier.fillMaxSize().padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
 
         // --- Compact solution strip ---------------------------------------
         val connected = link == LinkState.CONNECTED
@@ -153,71 +151,87 @@ fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             Text("Select a target point (from database) or type East/North to begin.",
                 style = MaterialTheme.typography.bodyMedium)
         } else {
-            // --- Guidance panel (X-Survey style) --------------------------
+            // --- Compact guidance strip -----------------------------------
             Card(Modifier.fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth().padding(12.dp)) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(1.1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Guide("Distance", dist?.let { "%.3f m".format(it) } ?: "—",
                             big = true, accent = onPoint)
                         Guide("Azimuth", azimuth?.let { "%.1f°".format(it) } ?: "—")
-                        if (cutFill != null)
-                            Guide(if (cutFill >= 0) "Cut" else "Fill", "%.3f m".format(abs(cutFill)))
                     }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Guide(if ((dN ?: 0.0) >= 0) "Go North" else "Go South",
                             dN?.let { "%.3f m".format(abs(it)) } ?: "—")
                         Guide(if ((dE ?: 0.0) >= 0) "Go East" else "Go West",
                             dE?.let { "%.3f m".format(abs(it)) } ?: "—")
-                        if (fwd != null && right != null) {
-                            Guide(if (fwd >= 0) "Forward" else "Back", "%.3f m".format(abs(fwd)))
-                            Guide(if (right >= 0) "Right" else "Left", "%.3f m".format(abs(right)))
-                        }
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        if (cutFill != null)
+                            Guide(if (cutFill >= 0) "Cut" else "Fill", "%.3f m".format(abs(cutFill)))
+                        if (fwd != null) Guide(if (fwd >= 0) "Fwd" else "Back", "%.2f".format(abs(fwd)))
+                        if (right != null) Guide(if (right >= 0) "Right" else "Left", "%.2f".format(abs(right)))
                     }
                 }
             }
 
             // --- View toggle: compass / map -------------------------------
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
                 ToggleChip("Compass", !showMap) { showMap = false }
                 ToggleChip("Map", showMap) { showMap = true }
-            }
-
-            if (!showMap) {
-                StakeCompass(azimuth, dist, onPoint, Modifier.fillMaxWidth())
+                androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
                 Text(
                     when {
-                        dist == null -> "Waiting for a position fix…"
-                        onPoint -> "ON POINT ✓ (within 3 cm)"
-                        else -> "Move %.2f m %s and %.2f m %s".format(
-                            abs(dN ?: 0.0), if ((dN ?: 0.0) >= 0) "North" else "South",
-                            abs(dE ?: 0.0), if ((dE ?: 0.0) >= 0) "East" else "West")
+                        dist == null -> "no fix"
+                        onPoint -> "ON POINT ✓"
+                        else -> "%s %.2f • %s %.2f".format(
+                            if ((dN ?: 0.0) >= 0) "N" else "S", abs(dN ?: 0.0),
+                            if ((dE ?: 0.0) >= 0) "E" else "W", abs(dE ?: 0.0))
                     },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = if (onPoint) SurveyColors.fixedGreen else MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (onPoint) SurveyColors.fixedGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            } else {
-                StakeMap(fix.latitude, fix.longitude, t.lat, t.lon,
-                    Modifier.fillMaxWidth().height(360.dp))
-                if (t.lat == null)
-                    Text("This target has no WGS84 position (typed E/N), so it can't be " +
-                        "placed on the map. Pick a target from the database to see it.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
-            // --- Escalating proximity audio -------------------------------
-            if (dist != null) {
-                val level = when {
-                    dist < 0.10 -> 3
-                    dist < 0.30 -> 2
-                    dist < 1.0 -> 1
-                    dist < 3.0 -> 0
-                    else -> -1
+            // --- Main view (gets all remaining height) --------------------
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                if (!showMap) {
+                    StakeCompass(azimuth, dist, onPoint, Modifier.fillMaxSize())
+                } else {
+                    StakeMap(fix.latitude, fix.longitude, t.lat, t.lon, Modifier.fillMaxSize())
+                    if (t.lat == null)
+                        Text("Typed E/N target has no map position — pick from database.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White,
+                            modifier = Modifier.align(Alignment.TopCenter)
+                                .background(Color(0x99000000)).padding(4.dp))
                 }
-                LaunchedEffect(onPoint, (dist / 0.05).toInt(), level) {
-                    if (onPoint) vm.audio.onPoint()
-                    else if (level >= 0) vm.audio.proximity(level)
+            }
+
+            // --- Stakeout audio -------------------------------------------
+            // btn_trim_centre beeps while 3 cm ≤ dist < 3 m (faster as you near);
+            // on point (< 3 cm) that stops and sce_waring loops continuously.
+            val distState = androidx.compose.runtime.rememberUpdatedState(dist)
+            val onPointState = androidx.compose.runtime.rememberUpdatedState(onPoint)
+            LaunchedEffect(Unit) {
+                while (true) {
+                    val d = distState.value; val op = onPointState.value
+                    if (op || d == null) kotlinx.coroutines.delay(200)
+                    else if (d in 0.03..3.0) {
+                        // Louder and faster as the point gets closer.
+                        val near = 1.0 - (d / 3.0)            // 0 at 3 m … ~1 near point
+                        vm.audio.stakeApproach((0.35 + 0.65 * near).toFloat())
+                        kotlinx.coroutines.delay((120 + (d / 3.0) * 780).toLong().coerceIn(120, 900))
+                    } else kotlinx.coroutines.delay(300)
                 }
+            }
+            LaunchedEffect(onPoint) {
+                if (onPoint) vm.audio.stakeOnPointStart() else vm.audio.stakeOnPointStop()
+            }
+            androidx.compose.runtime.DisposableEffect(Unit) {
+                onDispose { vm.audio.stakeOnPointStop() }
             }
         }
     }
@@ -266,10 +280,10 @@ fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 @Composable
 private fun Guide(label: String, value: String, big: Boolean = false, accent: Boolean = false) {
     Column {
-        Text(label, style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
         Text(value, fontFamily = FontFamily.Monospace,
-            fontSize = if (big) 22.sp else 15.sp,
+            fontSize = if (big) 17.sp else 13.sp,
             fontWeight = if (big) FontWeight.Bold else FontWeight.SemiBold,
             color = if (accent) SurveyColors.fixedGreen else MaterialTheme.colorScheme.onSurface,
             maxLines = 1, softWrap = false)
@@ -300,7 +314,7 @@ private fun StakeCompass(azimuthDeg: Double?, distM: Double?, onPoint: Boolean, 
     val green = SurveyColors.fixedGreen
 
     Card(modifier) {
-        Canvas(Modifier.fillMaxWidth().aspectRatio(1f).padding(16.dp)) {
+        Canvas(Modifier.fillMaxSize().padding(16.dp)) {
             val cx = size.width / 2f; val cy = size.height / 2f
             val R = minOf(cx, cy) * 0.92f
             drawCircle(ringColor, R, Offset(cx, cy), style = Stroke(6f))
@@ -365,12 +379,20 @@ private fun StakeMap(curLat: Double?, curLon: Double?, tLat: Double?, tLon: Doub
                 WebView(ctx).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = true
+                    settings.mixedContentMode =
+                        android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    setBackgroundColor(android.graphics.Color.DKGRAY)
+                    webChromeClient = android.webkit.WebChromeClient()
                     webRef[0] = this
                     loadDataWithBaseURL(
                         "https://smartgnss.local/",
                         mapHtml(tLat, tLon), "text/html", "utf-8", null)
                 }
             },
+            // After layout, Leaflet needs its size recalculated or tiles stay blank.
+            update = { w -> w.postDelayed({ w.evaluateJavascript("fixSize();", null) }, 400) },
         )
     }
     // Push live current position to the map.
@@ -400,7 +422,11 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
  {maxZoom:21,attribution:'Esri'}).addTo(map);
 var line; $targetJs
 var cur=null;
+function fixSize(){ map.invalidateSize(true); }
+window.addEventListener('resize', fixSize);
+setTimeout(fixSize,300); setTimeout(fixSize,900);
 function setCurrent(lat,lon){
+  map.invalidateSize();
   if(!cur){cur=L.circleMarker([lat,lon],{radius:7,color:'#0A6CBF',fillColor:'#0A6CBF',fillOpacity:1}).addTo(map);}
   else{cur.setLatLng([lat,lon]);}
   if(line&&tgt){line.setLatLngs([[lat,lon],tgt]); map.fitBounds(L.latLngBounds([[lat,lon],tgt]).pad(0.5));}
