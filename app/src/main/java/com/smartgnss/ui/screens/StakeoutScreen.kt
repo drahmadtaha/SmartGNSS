@@ -2,6 +2,8 @@ package com.smartgnss.ui.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -82,10 +84,10 @@ fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                 title = { Text("Select target from database") },
                 text = {
                     if (points.isEmpty()) Text("No saved points.")
-                    else androidx.compose.foundation.lazy.LazyColumn(
+                    else LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        androidx.compose.foundation.lazy.items(points.reversed()) { p ->
+                        items(points.reversed()) { p ->
                             val en = crs.toGrid(p.latitude, p.longitude, p.ellipsoidalHeight ?: p.altitude ?: 0.0)
                             Row(
                                 Modifier.fillMaxWidth()
