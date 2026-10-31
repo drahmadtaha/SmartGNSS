@@ -18,6 +18,7 @@ import com.smartgnss.core.survey.SurveyStore
 import com.smartgnss.core.transport.LinkState
 import com.smartgnss.core.transport.Transport
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine

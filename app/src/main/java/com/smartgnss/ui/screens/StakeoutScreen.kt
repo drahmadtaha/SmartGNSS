@@ -1,6 +1,7 @@
 package com.smartgnss.ui.screens
 
 import android.annotation.SuppressLint
+import android.graphics.BitmapFactory
 import android.webkit.WebView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -40,10 +41,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -289,8 +290,9 @@ private fun ToggleChip(label: String, selected: Boolean, onClick: () -> Unit) {
  *  flag at the target (held at a fixed radius; the numeric distance is exact). */
 @Composable
 private fun StakeCompass(azimuthDeg: Double?, distM: Double?, onPoint: Boolean, modifier: Modifier) {
-    val flagRed = androidx.compose.ui.res.imageResource(com.smartgnss.R.drawable.ic_flag_red)
-    val flagGreen = androidx.compose.ui.res.imageResource(com.smartgnss.R.drawable.ic_flag_green)
+    val ctx = LocalContext.current
+    val flagRed = remember { BitmapFactory.decodeResource(ctx.resources, com.smartgnss.R.drawable.ic_flag_red) }
+    val flagGreen = remember { BitmapFactory.decodeResource(ctx.resources, com.smartgnss.R.drawable.ic_flag_green) }
     val ringColor = Color(0xFF2B2B2B)
     val tickColor = Color(0xFF9AA0A6)
     val red = Color(0xFFD32F2F)
@@ -334,8 +336,8 @@ private fun StakeCompass(azimuthDeg: Double?, distM: Double?, onPoint: Boolean, 
                 // Flag bitmap at the target.
                 val img = if (onPoint) flagGreen else flagRed
                 val fw = R * 0.22f
-                drawContext.canvas.nativeCanvas.drawBitmap(
-                    img.asAndroidBitmap(),
+                if (img != null) drawContext.canvas.nativeCanvas.drawBitmap(
+                    img,
                     null,
                     android.graphics.RectF(tx - fw / 2, ty - fw, tx + fw / 2, ty),
                     null,
