@@ -462,6 +462,13 @@ private fun StakeMap(curLat: Double?, curLon: Double?, tLat: Double?, tLon: Doub
                     settings.useWideViewPort = true
                     settings.loadWithOverviewMode = true
                     settings.allowFileAccess = true
+                    // A file:// page must be allowed to load its own file:// scripts
+                    // (leaflet.js/css) or Leaflet never initialises and the map is blank.
+                    @Suppress("DEPRECATION")
+                    run {
+                        settings.allowFileAccessFromFileURLs = true
+                        settings.allowUniversalAccessFromFileURLs = true
+                    }
                     settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     setBackgroundColor(android.graphics.Color.DKGRAY)
                     webChromeClient = android.webkit.WebChromeClient()
