@@ -37,6 +37,12 @@ object Um982 {
     fun tiltEnable(poleMm: Int) = "AT+TILT=1,$poleMm"
     /** Disable the pole-tilt IMU. */
     const val TILT_DISABLE = "AT+TILT=0,0"
+    /** Ask the receiver to stream the ASCII tilt logs we parse, at 5 Hz.
+     *  (#SLANTAPA = pole attitude / compensated position, #SLANTSTATUSA =
+     *  IMU convergence state.) Sent when enabling tilt so the stream is on
+     *  even if another app hadn't already requested it. */
+    val tiltLogsOn = listOf("SLANTAPA 0.2", "SLANTSTATUSA 1")
+
     /** Query the antenna phase-centre offset (device replies +PHASECENTEROFFSET=mm). */
     const val QUERY_PHASE_CENTER = "AT+PHASECENTEROFFSET=?"
     /** IMU calibration step 1 (hold the pole vertical and steady). */
@@ -52,10 +58,15 @@ object Um982 {
     /** Stop all current output logs (clears binary logs that flood the BT link). */
     const val UNLOG_ALL = "UNLOGALL"
 
-    /** Full configuration sequence for a rover: clear binary logs, set rover mode,
-     *  then enable only the NMEA + heading sentences the app needs. */
+    /** Full configuration sequence for a rover: set rover mode, then enable the
+     *  NMEA + heading sentences the app needs.
+     *
+     *  NOTE: we deliberately do NOT send UNLOGALL here. The receiver's tilt /
+     *  IMU solution is delivered on the #SLANTAPA (and binary) logs, which
+     *  UNLOGALL would switch off — so the app only ADDS the logs it needs and
+     *  never disables what the receiver is already streaming. */
     fun configureRover(): List<String> =
-        listOf(UNLOG_ALL, MODE_ROVER) + nmeaOutput + HEADING_OUTPUT
+        listOf(MODE_ROVER) + nmeaOutput + HEADING_OUTPUT
 
     /** Just turn on the NMEA + heading output (no mode change) — safe to send
      *  automatically on connect so GGA/height starts flowing. */

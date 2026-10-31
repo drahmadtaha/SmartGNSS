@@ -209,6 +209,8 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     fun enableTiltOnReceiver() {
         val poleMm = (_antennaHeight.value * 1000).toInt().coerceIn(100, 6000)
         sendCommand(com.smartgnss.core.device.Um982.tiltEnable(poleMm))
+        // Make sure the ASCII tilt logs are flowing so we can read the solution.
+        com.smartgnss.core.device.Um982.tiltLogsOn.forEach { sendCommand(it) }
         sendCommand("AT+TILT=?")
     }
 
@@ -233,9 +235,11 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     /** True when tilt is on AND the receiver is supplying a #SLANTAPA solution,
      *  so measurements use the tilt-compensated ground point instead of the
      *  GGA antenna position. */
-    fun usingTiltPosition(fix: GnssFix): Boolean =
-        _tiltMode.value && fix.tiltValid &&
-            fix.tiltCompLat != null && fix.tiltCompLon != null
+    fun usingTiltPosition(fix: GnssFix): Boolean {
+        val la = fix.tiltCompLat; val lo = fix.tiltCompLon
+        return _tiltMode.value && fix.tiltValid && la != null && lo != null &&
+            kotlin.math.abs(la) > 1.0 && kotlin.math.abs(lo) > 1.0
+    }
 
     /** Project the current fix into the selected grid, with both heights.
      *  When tilt is active, the #SLANTAPA pole-tip position (already lean- and

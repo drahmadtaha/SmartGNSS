@@ -167,13 +167,29 @@ class NmeaParser {
         val lat = d[4].toDoubleOrNull()
         val lon = d[5].toDoubleOrNull()
         val hgt = d[6].toDoubleOrNull()
-        if (tilt == null) return false
+        // While the IMU is still converging the receiver streams an all-zero
+        // solution (lat/lon/tilt = 0); trusting it would peg the position at
+        // (0,0). Accept only a solution with a plausible latitude/longitude —
+        // this is firmware-independent (no reliance on the status flag's meaning).
+        val valid = lat != null && lon != null && lat.isFinite() && lon.isFinite() &&
+            kotlin.math.abs(lat) > 1.0 && kotlin.math.abs(lon) > 1.0
+        if (!valid) {
+            // Drop any stale compensated position so the app falls back to GGA.
+            if (fix.tiltValid || fix.tiltCompLat != null) {
+                fix = fix.copy(
+                    tiltValid = false, tiltCompLat = null,
+                    tiltCompLon = null, tiltCompAltEllip = null,
+                )
+                return true
+            }
+            return false
+        }
         fix = fix.copy(
-            tiltAngleDeg = tilt,
+            tiltAngleDeg = tilt ?: fix.tiltAngleDeg,
             tiltValid = true,
             projectionAngleDeg = proj ?: fix.projectionAngleDeg,
-            tiltCompLat = lat ?: fix.tiltCompLat,
-            tiltCompLon = lon ?: fix.tiltCompLon,
+            tiltCompLat = lat,
+            tiltCompLon = lon,
             tiltCompAltEllip = hgt ?: fix.tiltCompAltEllip,
         )
         return true

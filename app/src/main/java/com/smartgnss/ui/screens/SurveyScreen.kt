@@ -67,117 +67,66 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     var showExport by remember { mutableStateOf(false) }
     var showTiltCal by remember { mutableStateOf(false) }
 
-    Column(modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val canMeasure = fix.latitude != null
 
-        // Mode toggle: Normal <-> Tilt
-        Card(
-            Modifier.fillMaxWidth().clickable {
-                vm.beepClick()
-                val turningOn = !tilt
-                vm.setTiltMode(turningOn)
-                if (turningOn) showTiltCal = true
-            },
-            colors = CardDefaults.cardColors(
-                containerColor = if (tilt) SurveyColors.fixedGreen.copy(alpha = 0.14f)
-                else MaterialTheme.colorScheme.surfaceVariant
-            ),
+    Column(modifier.fillMaxSize()) {
+
+        // --- Scrolling content ------------------------------------------------
+        LazyColumn(
+            Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = 12.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.ScreenRotation, contentDescription = "Tilt",
-                    tint = if (tilt) SurveyColors.fixedGreen else MaterialTheme.colorScheme.onSurfaceVariant)
-                Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                    Text(if (tilt) "Tilt measurement — ON" else "Normal measurement",
-                        style = MaterialTheme.typography.titleSmall)
-                    Text(if (tilt)
-                        "Tilt ${fix.tiltAngleDeg?.let { "%.1f°".format(it) } ?: "—"} · tap to switch to normal"
-                    else "Pole must be vertical · tap to enable tilt",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Pill(if (tilt) "TILT" else "NORMAL",
-                    if (tilt) SurveyColors.fixedGreen else SurveyColors.singleGray)
-            }
-        }
-
-        // Name / code / antenna (X-Survey keeps these above the readout).
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(name, { name = it }, label = { Text("Name") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(code, { code = it }, label = { Text("Code") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(antH, { antH = it; it.toDoubleOrNull()?.let(vm::setAntennaHeight) },
-                label = { Text("Ant (m)") }, modifier = Modifier.weight(1f))
-        }
-
-        // Shared X-Survey solution panel (B/L/H · E/N/Elev · tilt rows).
-        SurveyStatusPanel(vm)
-
-        Row(verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-
-            // Round "measure" button, X-Survey style.
-            val canMeasure = fix.latitude != null
-            androidx.compose.foundation.layout.Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(
-                        if (canMeasure) SurveyColors.fixedGreen
+            // Mode toggle: Normal <-> Tilt
+            item {
+                Card(
+                    Modifier.fillMaxWidth().clickable {
+                        vm.beepClick()
+                        val turningOn = !tilt
+                        vm.setTiltMode(turningOn)
+                        if (turningOn) showTiltCal = true
+                    },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (tilt) SurveyColors.fixedGreen.copy(alpha = 0.14f)
                         else MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    .clickable(enabled = canMeasure) {
-                        val p = vm.recordPoint(name, code)
-                        if (p != null) {
-                            vm.beepMeasure()
-                            name = nextName(name)
-                            Toast.makeText(context, "Recorded ${p.name}", Toast.LENGTH_SHORT).show()
-                        } else {
-                            vm.beepClick()
-                            Toast.makeText(context, "No position fix yet", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-            ) {
-                Icon(Icons.Filled.GpsFixed,
-                    contentDescription = "Measure point",
-                    tint = androidx.compose.ui.graphics.Color.White)
-            }
-            Text("Measure", style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-            Spacer(Modifier.weight(1f))
-
-            androidx.compose.foundation.layout.Box {
-                OutlinedButton(
-                    onClick = {
-                        if (!vm.license.has(Feature.SURVEY_EXPORT))
-                            Toast.makeText(context, "Export not in your license", Toast.LENGTH_LONG).show()
-                        else showExport = true
-                    },
-                    enabled = points.isNotEmpty(),
-                ) { Text("Export") }
-                androidx.compose.material3.DropdownMenu(
-                    expanded = showExport, onDismissRequest = { showExport = false }
+                    ),
                 ) {
-                    val proj: (SurveyPoint) -> Pair<Double, Double>? =
-                        { p -> crs.toGrid(p.latitude, p.longitude, p.altitude ?: 0.0) }
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text("CSV (.csv)") },
-                        onClick = { showExport = false
-                            shareText(context, "points.csv", "text/csv", vm.survey.toCsv(proj)) })
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text("Text (.txt)") },
-                        onClick = { showExport = false
-                            shareText(context, "points.txt", "text/plain", vm.survey.toTxt(proj)) })
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text("AutoCAD (.dxf)") },
-                        onClick = { showExport = false
-                            shareText(context, "points.dxf", "application/dxf", vm.survey.toDxf(proj)) })
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.ScreenRotation, contentDescription = "Tilt",
+                            tint = if (tilt) SurveyColors.fixedGreen else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                            Text(if (tilt) "Tilt measurement — ON" else "Normal measurement",
+                                style = MaterialTheme.typography.titleSmall)
+                            Text(if (tilt)
+                                "Tilt ${fix.tiltAngleDeg?.let { "%.1f°".format(it) } ?: "—"} · tap to switch to normal"
+                            else "Pole must be vertical · tap to enable tilt",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Pill(if (tilt) "TILT" else "NORMAL",
+                            if (tilt) SurveyColors.fixedGreen else SurveyColors.singleGray)
+                    }
                 }
             }
-        }
 
-        com.smartgnss.ui.theme.SectionHeader("Collected points (${points.size})")
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            // Name / code / antenna (X-Survey keeps these above the readout).
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(name, { name = it }, label = { Text("Name") },
+                        singleLine = true, modifier = Modifier.weight(1f))
+                    OutlinedTextField(code, { code = it }, label = { Text("Code") },
+                        singleLine = true, modifier = Modifier.weight(1f))
+                    OutlinedTextField(antH, { antH = it; it.toDoubleOrNull()?.let(vm::setAntennaHeight) },
+                        label = { Text("Ant (m)") }, singleLine = true, modifier = Modifier.weight(1f))
+                }
+            }
+
+            // Shared X-Survey solution panel (B/L/H · E/N/Elev · tilt rows).
+            item { SurveyStatusPanel(vm) }
+
+            item { com.smartgnss.ui.theme.SectionHeader("Collected points (${points.size})") }
+
             items(points.reversed()) { p ->
                 Card(Modifier.fillMaxWidth().clickable { detail = p }) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -186,7 +135,7 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(p.name, style = MaterialTheme.typography.titleSmall)
                                 Pill(p.quality.label, fixQualityColor(p.quality))
-                                if (p.tiltAngleDeg != null) Pill("TILT", SurveyColors.fixedGreen)
+                                if (p.tiltCompensated) Pill("TILT", SurveyColors.fixedGreen)
                             }
                             Text("%.8f, %.8f".format(p.latitude, p.longitude),
                                 fontFamily = FontFamily.Monospace,
@@ -195,6 +144,83 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                    }
+                }
+            }
+        }
+
+        // --- Fixed bottom action bar: round Measure button + Export ----------
+        androidx.compose.material3.Surface(
+            tonalElevation = 3.dp, shadowElevation = 10.dp,
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                androidx.compose.foundation.layout.Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(66.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(
+                            if (canMeasure) SurveyColors.fixedGreen
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        .clickable(enabled = canMeasure) {
+                            val p = vm.recordPoint(name, code)
+                            if (p != null) {
+                                vm.beepMeasure()
+                                name = nextName(name)
+                                Toast.makeText(context, "Recorded ${p.name}", Toast.LENGTH_SHORT).show()
+                            } else {
+                                vm.beepClick()
+                                Toast.makeText(context, "No position fix yet", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                ) {
+                    Icon(Icons.Filled.GpsFixed, contentDescription = "Measure point",
+                        tint = androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier.size(30.dp))
+                }
+                Column {
+                    Text("Measure", style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface)
+                    Text(if (vm.usingTiltPosition(fix)) "tilt-compensated point"
+                         else "vertical pole",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                androidx.compose.foundation.layout.Box {
+                    OutlinedButton(
+                        onClick = {
+                            if (!vm.license.has(Feature.SURVEY_EXPORT))
+                                Toast.makeText(context, "Export not in your license", Toast.LENGTH_LONG).show()
+                            else showExport = true
+                        },
+                        enabled = points.isNotEmpty(),
+                    ) { Text("Export") }
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = showExport, onDismissRequest = { showExport = false }
+                    ) {
+                        val proj: (SurveyPoint) -> Pair<Double, Double>? =
+                            { p -> crs.toGrid(p.latitude, p.longitude, p.altitude ?: 0.0) }
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("CSV (.csv)") },
+                            onClick = { showExport = false
+                                shareText(context, "points.csv", "text/csv", vm.survey.toCsv(proj)) })
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Text (.txt)") },
+                            onClick = { showExport = false
+                                shareText(context, "points.txt", "text/plain", vm.survey.toTxt(proj)) })
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("AutoCAD (.dxf)") },
+                            onClick = { showExport = false
+                                shareText(context, "points.dxf", "application/dxf", vm.survey.toDxf(proj)) })
                     }
                 }
             }

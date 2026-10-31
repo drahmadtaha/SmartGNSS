@@ -122,20 +122,25 @@ private fun HeaderStat(label: String, value: String) {
     }
 }
 
-/** One column line: bold label (B/L/H/E/N/Elev) + monospace value + unit. */
+/** One column line: small bold label (B/L/H/E/N/Elev) over a single-line value.
+ *  Label sits above the value so long DMS strings get the full column width and
+ *  never wrap. */
 @Composable
 private fun CoordRow(label: String, value: String, unit: String? = null) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        Text(label, style = MaterialTheme.typography.titleSmall,
+    Column {
+        Text(label, style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(end = 6.dp))
-        Text(value, fontSize = 15.sp, fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface)
-        if (unit != null) Text(" $unit", style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 2.dp, start = 2.dp))
+            color = MaterialTheme.colorScheme.primary)
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(value, fontSize = 15.sp, fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1, softWrap = false,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Clip)
+            if (unit != null) Text(" $unit", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 2.dp, start = 2.dp))
+        }
     }
 }
 
@@ -174,11 +179,13 @@ internal fun dmsLon(deg: Double): String =
     dmsHemi(deg, if (deg >= 0) "E" else "W")
 
 private fun dmsHemi(deg: Double, hemi: String): String {
-    var a = abs(deg)
+    val a = abs(deg)
     var d = a.toInt()
     var m = ((a - d) * 60).toInt()
     var s = (a - d - m / 60.0) * 3600.0
-    if (s >= 59.999995) { s = 0.0; m += 1 }
+    // 3 decimals of arc-second ≈ 0.03 m — compact enough for one line; full
+    // precision is kept in the stored decimal-degree coordinate and exports.
+    if (s >= 59.9995) { s = 0.0; m += 1 }
     if (m >= 60) { m -= 60; d += 1 }
-    return "%d°%02d'%08.5f\"%s".format(d, m, s, hemi)
+    return "%d°%02d'%06.3f\"%s".format(d, m, s, hemi)
 }
