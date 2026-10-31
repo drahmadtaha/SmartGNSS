@@ -207,10 +207,12 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Explicitly enable tilt on the receiver (AT+TILT=1,<poleMm>). */
     fun enableTiltOnReceiver() {
+        // Match X-Survey exactly: ICE tilt is enabled with AT+TILT=1,<antMm>
+        // (antenna/pole height in mm) and nothing else — the receiver starts its
+        // tilt (#SLANTAPA) stream itself. The height is the pole height; the
+        // receiver adds its own phase-centre offset internally.
         val poleMm = (_antennaHeight.value * 1000).toInt().coerceIn(100, 6000)
         sendCommand(com.smartgnss.core.device.Um982.tiltEnable(poleMm))
-        // Make sure the ASCII tilt logs are flowing so we can read the solution.
-        com.smartgnss.core.device.Um982.tiltLogsOn.forEach { sendCommand(it) }
         sendCommand("AT+TILT=?")
     }
 

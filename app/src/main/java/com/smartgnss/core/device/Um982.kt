@@ -37,12 +37,6 @@ object Um982 {
     fun tiltEnable(poleMm: Int) = "AT+TILT=1,$poleMm"
     /** Disable the pole-tilt IMU. */
     const val TILT_DISABLE = "AT+TILT=0,0"
-    /** Ask the receiver to stream the ASCII tilt logs we parse, at 5 Hz.
-     *  (#SLANTAPA = pole attitude / compensated position, #SLANTSTATUSA =
-     *  IMU convergence state.) Sent when enabling tilt so the stream is on
-     *  even if another app hadn't already requested it. */
-    val tiltLogsOn = listOf("SLANTAPA 0.2", "SLANTSTATUSA 1")
-
     /** Query the antenna phase-centre offset (device replies +PHASECENTEROFFSET=mm). */
     const val QUERY_PHASE_CENTER = "AT+PHASECENTEROFFSET=?"
     /** IMU calibration step 1 (hold the pole vertical and steady). */
