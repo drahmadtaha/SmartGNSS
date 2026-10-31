@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="leaflet.css"/>
+<style>html,body,#map{height:100%;margin:0;background:#444}</style></head>
+<body><div id="map"></div>
+<script src="leaflet.js"></script>
+<script>
+var map=L.map('map',{attributionControl:false}).setView([31.9,35.2],18);
+var tileLayer=null,line=null,tgtMarker=null,cur=null,tgt=null;
+function setTiles(url){ if(tileLayer){map.removeLayer(tileLayer);} tileLayer=L.tileLayer(url,{maxZoom:21}).addTo(map); fixSize(); }
+function setTarget(lat,lon){
+  tgt=[lat,lon];
+  if(tgtMarker) map.removeLayer(tgtMarker);
+  tgtMarker=L.marker(tgt,{icon:L.divIcon({className:'',html:'<img src="flag.png" width="26">',iconSize:[26,26],iconAnchor:[5,26]})}).addTo(map);
+  if(!line) line=L.polyline([tgt,tgt],{color:'#D32F2F',weight:4}).addTo(map);
+  map.setView(tgt,19); setTimeout(fixSize,200);
+}
+function fixSize(){ map.invalidateSize(true); }
+window.addEventListener('resize',fixSize);
+function setCurrent(lat,lon){
+  if(!cur){cur=L.circleMarker([lat,lon],{radius:7,color:'#0A6CBF',fillColor:'#0A6CBF',fillOpacity:1}).addTo(map);}
+  else cur.setLatLng([lat,lon]);
+  if(line&&tgt){line.setLatLngs([[lat,lon],tgt]); map.fitBounds(L.latLngBounds([[lat,lon],tgt]).pad(0.6));}
+  else map.setView([lat,lon]);
+  fixSize();
+}
+setTiles('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}');
+setTimeout(fixSize,400); setTimeout(fixSize,1000);
+</script></body></html>

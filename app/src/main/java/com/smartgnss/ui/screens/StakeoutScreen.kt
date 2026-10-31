@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -87,6 +90,7 @@ fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     var showMap by remember { mutableStateOf(false) }
     var mapSource by remember { mutableStateOf(MapSource.GOOGLE_SAT) }
     var showMapMenu by remember { mutableStateOf(false) }
+    var showCalib by remember { mutableStateOf(false) }
 
     val heading by rememberDeviceHeading()
     val cur = vm.gridFor(fix)
@@ -178,6 +182,15 @@ fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                             }
                         }
                     }
+                } else {
+                    OutlinedButton(onClick = { showCalib = true },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = 12.dp, vertical = 6.dp)) {
+                        Icon(Icons.Filled.Explore, contentDescription = "Compass help",
+                            modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Calibrate", maxLines = 1, softWrap = false)
+                    }
                 }
             }
 
@@ -250,6 +263,67 @@ fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             },
             confirmButton = { TextButton(onClick = { showPicker = false }) { Text("Close") } },
         )
+    }
+
+    if (showCalib) CompassCalibrationDialog { showCalib = false }
+}
+
+/** Explains that the compass uses the phone's magnetometer and demonstrates the
+ *  figure-8 calibration motion with a live animation. */
+@Composable
+private fun CompassCalibrationDialog(onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Compass calibration") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("The compass rotation uses your phone's magnetometer. If the arrow " +
+                    "drifts, points the wrong way, or lags, calibrate the sensor: hold the " +
+                    "phone and move it through a figure-8 in the air a few times, rotating " +
+                    "your wrist, until it settles.",
+                    style = MaterialTheme.typography.bodyMedium)
+                Figure8Demo(Modifier.fillMaxWidth().padding(vertical = 4.dp))
+                Text("Keep away from metal, magnets and phone cases with magnets. Without a " +
+                    "magnetometer the dial stays north-up (the arrow still points to the point).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Got it") } },
+    )
+}
+
+/** A dot tracing a figure-8 to demonstrate the calibration motion. */
+@Composable
+private fun Figure8Demo(modifier: Modifier = Modifier) {
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "fig8")
+    val t by transition.animateFloat(
+        initialValue = 0f, targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(2600,
+                easing = androidx.compose.animation.core.LinearEasing)),
+        label = "theta",
+    )
+    val blue = SurveyColors.brandBlue
+    val faint = Color(0xFF9AA0A6)
+    Canvas(modifier.padding(8.dp).fillMaxWidth().height(120.dp)) {
+        val cx = size.width / 2f; val cy = size.height / 2f
+        val ax = minOf(cx, cy) * 1.4f; val ay = minOf(cx, cy) * 0.8f
+        // Faint figure-8 path (lemniscate of Gerono).
+        val path = androidx.compose.ui.graphics.Path()
+        var first = true
+        var th = 0f
+        while (th <= (2 * Math.PI).toFloat() + 0.05f) {
+            val x = cx + ax * sin(th.toDouble()).toFloat()
+            val y = cy + ay * sin(2 * th.toDouble()).toFloat()
+            if (first) { path.moveTo(x, y); first = false } else path.lineTo(x, y)
+            th += 0.1f
+        }
+        drawPath(path, faint, style = Stroke(4f))
+        // Moving "phone" dot.
+        val dx = cx + ax * sin(t.toDouble()).toFloat()
+        val dy = cy + ay * sin(2 * t.toDouble()).toFloat()
+        drawCircle(blue, minOf(cx, cy) * 0.14f, Offset(dx, dy))
     }
 }
 
@@ -377,6 +451,7 @@ private fun StakeCompass(azimuthDeg: Double?, distM: Double?, onPoint: Boolean,
 private fun StakeMap(curLat: Double?, curLon: Double?, tLat: Double?, tLon: Double?,
                      source: MapSource, modifier: Modifier) {
     val webRef = remember { arrayOfNulls<WebView>(1) }
+    var loaded by remember { mutableStateOf(false) }
     Card(modifier) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -386,55 +461,37 @@ private fun StakeMap(curLat: Double?, curLon: Double?, tLat: Double?, tLon: Doub
                     settings.domStorageEnabled = true
                     settings.useWideViewPort = true
                     settings.loadWithOverviewMode = true
+                    settings.allowFileAccess = true
                     settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     setBackgroundColor(android.graphics.Color.DKGRAY)
                     webChromeClient = android.webkit.WebChromeClient()
+                    webViewClient = object : android.webkit.WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            loaded = true
+                            view?.evaluateJavascript("setTiles('${source.url}');", null)
+                            if (tLat != null && tLon != null)
+                                view?.evaluateJavascript("setTarget($tLat,$tLon);", null)
+                            if (curLat != null && curLon != null)
+                                view?.evaluateJavascript("setCurrent($curLat,$curLon);", null)
+                        }
+                    }
                     webRef[0] = this
-                    loadDataWithBaseURL("https://smartgnss.local/",
-                        mapHtml(tLat, tLon), "text/html", "utf-8", null)
+                    // Self-contained map: Leaflet is bundled in assets, so only the
+                    // tiles need internet (no CDN dependency).
+                    loadUrl("file:///android_asset/stakeout_map.html")
                 }
             },
-            update = { w -> w.postDelayed({ w.evaluateJavascript("fixSize();", null) }, 400) },
         )
     }
-    LaunchedEffect(source) {
-        webRef[0]?.postDelayed(
-            { webRef[0]?.evaluateJavascript("setTiles('${source.url}');", null) }, 300)
+    LaunchedEffect(loaded, source) {
+        if (loaded) webRef[0]?.evaluateJavascript("setTiles('${source.url}');", null)
     }
-    LaunchedEffect(curLat, curLon) {
-        val w = webRef[0]
-        if (w != null && curLat != null && curLon != null)
-            w.evaluateJavascript("setCurrent($curLat,$curLon);", null)
+    LaunchedEffect(loaded, tLat, tLon) {
+        if (loaded && tLat != null && tLon != null)
+            webRef[0]?.evaluateJavascript("setTarget($tLat,$tLon);", null)
     }
-}
-
-private fun mapHtml(tLat: Double?, tLon: Double?): String {
-    val centerLat = tLat ?: 31.9; val centerLon = tLon ?: 35.2
-    val targetJs = if (tLat != null && tLon != null)
-        "var tgt=[$tLat,$tLon]; L.marker(tgt).addTo(map).bindPopup('Target'); " +
-        "line=L.polyline([tgt,tgt],{color:'#D32F2F',weight:4}).addTo(map);"
-    else "var tgt=null; line=null;"
-    return """
-<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<style>html,body,#map{height:100%;margin:0;background:#444}</style></head><body><div id="map"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script>
-var map=L.map('map').setView([$centerLat,$centerLon],18);
-var tileLayer=null;
-function setTiles(url){ if(tileLayer){map.removeLayer(tileLayer);} tileLayer=L.tileLayer(url,{maxZoom:21}).addTo(map); }
-setTiles('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}');
-var line; $targetJs
-var cur=null;
-function fixSize(){ map.invalidateSize(true); }
-window.addEventListener('resize', fixSize);
-setTimeout(fixSize,300); setTimeout(fixSize,900);
-function setCurrent(lat,lon){
-  map.invalidateSize();
-  if(!cur){cur=L.circleMarker([lat,lon],{radius:7,color:'#0A6CBF',fillColor:'#0A6CBF',fillOpacity:1}).addTo(map);}
-  else{cur.setLatLng([lat,lon]);}
-  if(line&&tgt){line.setLatLngs([[lat,lon],tgt]); map.fitBounds(L.latLngBounds([[lat,lon],tgt]).pad(0.5));}
-  else{map.setView([lat,lon]);}
-}
-</script></body></html>""".trimIndent()
+    LaunchedEffect(loaded, curLat, curLon) {
+        if (loaded && curLat != null && curLon != null)
+            webRef[0]?.evaluateJavascript("setCurrent($curLat,$curLon);", null)
+    }
 }
