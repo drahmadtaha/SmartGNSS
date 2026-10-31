@@ -93,9 +93,11 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                 ) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.foundation.Image(
+                            // Green when tilt is converged and live; red when it's
+                            // off or not yet converged / not working well.
                             painter = androidx.compose.ui.res.painterResource(
-                                if (tilt) com.smartgnss.R.drawable.ic_tilt_on
-                                else com.smartgnss.R.drawable.ic_tilt_off),
+                                if (tilt && fix.tiltValid) com.smartgnss.R.drawable.ic_tilt_ok
+                                else com.smartgnss.R.drawable.ic_tilt_warn),
                             contentDescription = "Tilt",
                             modifier = Modifier.size(34.dp))
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
@@ -208,16 +210,17 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                         tint = androidx.compose.ui.graphics.Color.White,
                         modifier = Modifier.size(30.dp))
                 }
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text("Measure", style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface)
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1, softWrap = false)
                     Text(if (vm.usingTiltPosition(fix)) "tilt-compensated point"
                          else "vertical pole",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1, softWrap = false,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
-
-                Spacer(Modifier.weight(1f))
 
                 androidx.compose.foundation.layout.Box {
                     OutlinedButton(
@@ -227,7 +230,9 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                             else showExport = true
                         },
                         enabled = points.isNotEmpty(),
-                    ) { Text("Export") }
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = 20.dp, vertical = 8.dp),
+                    ) { Text("Export", maxLines = 1, softWrap = false) }
                     androidx.compose.material3.DropdownMenu(
                         expanded = showExport, onDismissRequest = { showExport = false }
                     ) {

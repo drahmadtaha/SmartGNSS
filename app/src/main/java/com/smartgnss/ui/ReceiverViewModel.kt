@@ -360,6 +360,64 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // --- Multi-epoch averaging (X-Survey "smooth") ---------------------------
+    private val _averaging = MutableStateFlow(false)
+    val averaging = _averaging.asStateFlow()
+    private val _avgCollected = MutableStateFlow(0)
+    val avgCollected = _avgCollected.asStateFlow()
+    private var averagingJob: Job? = null
+
+    fun cancelAveraging() {
+        averagingJob?.cancel(); averagingJob = null
+        _averaging.value = false; _avgCollected.value = 0
+    }
+
+    /** Record a point averaged over [epochs] distinct fixes (by UTC). Collects
+     *  only RTK-Fixed epochs in the mode active at the start, averages the ground
+     *  position, and stores one point. [epochs] <= 1 records instantly. */
+    fun recordPointAveraged(
+        name: String, code: String, epochs: Int,
+        onResult: (com.smartgnss.core.survey.SurveyPoint?) -> Unit,
+    ) {
+        if (epochs <= 1) { onResult(recordPoint(name, code)); return }
+        averagingJob?.cancel()
+        _averaging.value = true; _avgCollected.value = 0
+        val useTilt = usingTiltPosition(_fix.value)
+        averagingJob = viewModelScope.launch {
+            val lats = ArrayList<Double>(); val lons = ArrayList<Double>()
+            val alts = ArrayList<Double>(); val ells = ArrayList<Double>()
+            var lastUtc: String? = null
+            var guardMs = 0
+            while (lats.size < epochs && guardMs < epochs * 4000 && isActive) {
+                val f = _fix.value
+                val tiltNow = usingTiltPosition(f)
+                val grid = gridFor(f)
+                val la = if (tiltNow) f.tiltCompLat else f.latitude
+                val lo = if (tiltNow) f.tiltCompLon else f.longitude
+                val fixedOk = f.quality == com.smartgnss.core.nmea.FixQuality.RTK_FIXED
+                if (f.utc != null && f.utc != lastUtc && grid != null &&
+                    la != null && lo != null && fixedOk && tiltNow == useTilt) {
+                    lastUtc = f.utc
+                    lats.add(la); lons.add(lo)
+                    (if (tiltNow) grid.orthometricHeight else f.altitudeMsl)?.let { alts.add(it) }
+                    grid.ellipsoidalHeight?.let { ells.add(it) }
+                    _avgCollected.value = lats.size
+                }
+                kotlinx.coroutines.delay(100); guardMs += 100
+            }
+            _averaging.value = false
+            if (!isActive || lats.isEmpty()) { onResult(null); return@launch }
+            val p = survey.record(
+                name, code, _fix.value, effectiveAntennaHeight(), useTilt,
+                lat = lats.average(), lon = lons.average(),
+                altitudeMsl = if (alts.isNotEmpty()) alts.average() else null,
+                ellipsoidalHeight = if (ells.isNotEmpty()) ells.average() else null,
+                tiltCompensated = useTilt,
+            )
+            onResult(p)
+        }
+    }
+
     fun fetchMountPoints(host: String, port: Int, user: String, pass: String) {
         viewModelScope.launch {
             _mountPoints.value = try {
@@ -607,4 +665,9 @@ data class StakeTarget(
     val name: String,
     val east: Double,
     val north: Double,
+    // Optional WGS84 position (set when the target came from a saved point), used
+    // to place the target on the map view. Null for manually-typed E/N targets.
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val designElev: Double? = null,  // optional design elevation for cut/fill
 )

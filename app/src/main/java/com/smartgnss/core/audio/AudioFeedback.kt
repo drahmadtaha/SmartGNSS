@@ -24,9 +24,17 @@ class AudioFeedback(context: Context) {
     var soundEnabled = true
     var voiceEnabled = true
 
+    // Louder, separate generator for stakeout proximity so it can be heard
+    // outdoors. STREAM_ALARM follows the alarm volume (usually high) and the
+    // generator volume is maxed.
+    private var alarmTone: ToneGenerator? = null
+
     init {
         runCatching {
             tone = ToneGenerator(AudioManager.STREAM_MUSIC, 90)
+        }
+        runCatching {
+            alarmTone = ToneGenerator(AudioManager.STREAM_ALARM, 100)
         }
         runCatching {
             val attrs = AudioAttributes.Builder()
@@ -59,8 +67,30 @@ class AudioFeedback(context: Context) {
     /** A single proximity beep for stakeout (call more often as you get closer). */
     fun proximity() = tone(ToneGenerator.TONE_PROP_BEEP, 60)
 
-    /** "On point" double tone for stakeout success. */
-    fun onPoint() = tone(ToneGenerator.TONE_PROP_BEEP2, 200)
+    /**
+     * Stakeout proximity that gets louder/sharper the closer you are.
+     * [level] 0 (far) … 3 (very close). Uses the alarm stream at max volume and
+     * a higher-pitched, longer tone as level rises so it's clearly audible
+     * outdoors and intensifies on approach.
+     */
+    fun proximity(level: Int) {
+        if (!soundEnabled) return
+        val t = alarmTone ?: tone ?: return
+        val (type, ms) = when (level.coerceIn(0, 3)) {
+            0 -> ToneGenerator.TONE_PROP_BEEP to 50
+            1 -> ToneGenerator.TONE_CDMA_PIP to 70
+            2 -> ToneGenerator.TONE_CDMA_HIGH_L to 110
+            else -> ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD to 160
+        }
+        runCatching { t.startTone(type, ms) }
+    }
+
+    /** "On point" loud double tone for stakeout success (alarm stream). */
+    fun onPoint() {
+        if (!soundEnabled) return
+        val t = alarmTone ?: tone ?: return
+        runCatching { t.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 250) }
+    }
 
     private fun tone(type: Int, ms: Int) {
         if (!soundEnabled) return
@@ -76,7 +106,8 @@ class AudioFeedback(context: Context) {
     fun release() {
         runCatching { tts?.shutdown() }
         runCatching { tone?.release() }
+        runCatching { alarmTone?.release() }
         runCatching { pool?.release() }
-        tts = null; tone = null; pool = null
+        tts = null; tone = null; alarmTone = null; pool = null
     }
 }

@@ -136,21 +136,29 @@ private fun CoordPairRow(
             Text(lLabel, style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.width(16.dp))
-            Text(lValue, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+            Text(lValue, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1, softWrap = false)
+                maxLines = 1, softWrap = false,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Clip)
             if (lUnit != null) Text(lUnit, style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 1.dp, bottom = 1.dp))
         }
         Spacer(Modifier.width(6.dp))
-        // Right — large primary (grid E/N/Elev).
+        // Right — large primary (grid E/N/Elev). Font scales down for longer
+        // numbers so it always fits a phone-width column without wrapping.
+        val rSize = when {
+            rValue.length >= 12 -> 15.sp
+            rValue.length >= 10 -> 17.sp
+            rValue.length >= 9 -> 19.sp
+            else -> 21.sp
+        }
         Row(Modifier.weight(1.08f), verticalAlignment = Alignment.Bottom) {
             Text(rLabel, style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
                 maxLines = 1, softWrap = false,
                 modifier = Modifier.width(38.dp))
-            Text(rValue, fontSize = 20.sp, fontFamily = FontFamily.Monospace,
+            Text(rValue, fontSize = rSize, fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1, softWrap = false)
             if (rUnit != null) Text(" $rUnit", style = MaterialTheme.typography.labelSmall,
