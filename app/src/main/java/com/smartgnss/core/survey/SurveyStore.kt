@@ -18,6 +18,7 @@ data class SurveyPoint(
     val latitude: Double,
     val longitude: Double,
     val altitude: Double?,         // orthometric (MSL) at the antenna, from receiver
+    val ellipsoidalHeight: Double? = null, // ellipsoidal height at the ground mark (WGS84)
     val quality: FixQuality,
     val satellitesUsed: Int,
     val satellitesTracked: Int,
@@ -41,6 +42,7 @@ data class SurveyPoint(
         put("name", name); put("code", code)
         put("lat", latitude); put("lon", longitude)
         put("alt", altitude ?: JSONObject.NULL)
+        put("eh", ellipsoidalHeight ?: JSONObject.NULL)
         put("q", quality.code)
         put("su", satellitesUsed); put("st", satellitesTracked)
         put("hrms", hrms ?: JSONObject.NULL); put("vrms", vrms ?: JSONObject.NULL)
@@ -60,6 +62,7 @@ data class SurveyPoint(
             name = o.getString("name"), code = o.optString("code"),
             latitude = o.getDouble("lat"), longitude = o.getDouble("lon"),
             altitude = o.dOrNull("alt"),
+            ellipsoidalHeight = o.dOrNull("eh"),
             quality = FixQuality.from(o.optInt("q", 0)),
             satellitesUsed = o.optInt("su"), satellitesTracked = o.optInt("st"),
             hrms = o.dOrNull("hrms"), vrms = o.dOrNull("vrms"),
@@ -106,13 +109,15 @@ class SurveyStore(private val context: Context) {
         lat: Double? = fix.latitude,
         lon: Double? = fix.longitude,
         altitudeMsl: Double? = fix.altitudeMsl,
+        ellipsoidalHeight: Double? = null,
         tiltCompensated: Boolean = false,
     ): SurveyPoint? {
         val la = lat ?: return null
         val lo = lon ?: return null
         val p = SurveyPoint(
             name = name, code = code, latitude = la, longitude = lo,
-            altitude = altitudeMsl, quality = fix.quality,
+            altitude = altitudeMsl, ellipsoidalHeight = ellipsoidalHeight,
+            quality = fix.quality,
             satellitesUsed = fix.satellitesUsed, satellitesTracked = fix.satellitesTracked,
             hrms = fix.hrms, vrms = fix.vrms,
             pdop = fix.pdop, hdop = fix.hdop, vdop = fix.vdop,
@@ -205,7 +210,7 @@ class SurveyStore(private val context: Context) {
     /** Full-attribute CSV; [project] supplies grid East/North per point. */
     fun toCsv(project: (SurveyPoint) -> Pair<Double, Double>?): String = buildString {
         appendLine(
-            "name,code,date_time,latitude,longitude,east,north,ortho_h,ant_height," +
+            "name,code,date_time,latitude,longitude,ellip_h,ortho_h,east,north,ant_height," +
                 "quality,sats_used,sats_tracked,hrms,vrms,pdop,hdop,vdop,age_s,tilt_deg,projection_deg,heading_deg"
         )
         _points.value.forEach { p ->
@@ -214,9 +219,10 @@ class SurveyStore(private val context: Context) {
                 append(p.name).append(',').append(p.code).append(',')
                 append(dtFmt.format(java.util.Date(p.timestampMs))).append(',')
                 append(p.latitude).append(',').append(p.longitude).append(',')
+                append(p.ellipsoidalHeight?.let { "%.4f".format(it) } ?: "").append(',')
+                append(ground(p)?.let { "%.4f".format(it) } ?: "").append(',')
                 append(en?.first?.let { "%.4f".format(it) } ?: "").append(',')
                 append(en?.second?.let { "%.4f".format(it) } ?: "").append(',')
-                append(ground(p)?.let { "%.4f".format(it) } ?: "").append(',')
                 append(p.antennaHeight).append(',')
                 append(p.quality.label).append(',')
                 append(p.satellitesUsed).append(',').append(p.satellitesTracked).append(',')

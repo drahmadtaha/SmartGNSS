@@ -77,6 +77,7 @@ import com.smartgnss.ui.screens.SettingsScreen
 import com.smartgnss.ui.screens.SkyPlotScreen
 import com.smartgnss.ui.screens.StakeoutScreen
 import com.smartgnss.ui.screens.StatusScreen
+import com.smartgnss.ui.screens.DeviceInfoScreen
 import com.smartgnss.ui.screens.SurveyScreen
 import com.smartgnss.ui.shell.MenuEntry
 import com.smartgnss.ui.shell.MenuGrid
@@ -218,6 +219,7 @@ private fun SubContent(vm: ReceiverViewModel, sub: Sub, onCrsApplied: () -> Unit
         Sub.DATA_TERMINAL -> DataTerminalScreen(vm)
         Sub.SATELLITES -> SkyPlotScreen(vm)
         Sub.GNSS_STATUS -> StatusScreen(vm)
+        Sub.DEVICE_INFO -> DeviceInfoScreen(vm)
         Sub.LICENSE -> ActivationScreen(vm, gate = false)
         Sub.INVERSE -> InverseScreen()
         Sub.AREA -> AreaScreen(vm)

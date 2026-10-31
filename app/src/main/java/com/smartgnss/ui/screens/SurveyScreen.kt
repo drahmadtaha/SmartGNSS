@@ -366,11 +366,14 @@ internal fun PointDetailDialog(p: SurveyPoint, en: Pair<Double, Double>, onClose
                 DetailRow("Date / time", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(p.timestampMs)))
                 DetailRow("Latitude", "%.8f°".format(p.latitude))
                 DetailRow("Longitude", "%.8f°".format(p.longitude))
-                DetailRow("Altitude (MSL)", p.altitude?.let { "%.4f m".format(it) } ?: "—")
+                DetailRow("Ellipsoidal H", p.ellipsoidalHeight?.let { "%.4f m".format(it) } ?: "—")
+                // Ground orthometric elevation: tilt-compensated points are already
+                // at the mark, so the antenna offset is removed only for normal ones.
+                val groundElev = if (p.tiltCompensated) p.altitude
+                                 else p.altitude?.minus(p.antennaHeight)
+                DetailRow("Elevation (MSL)", groundElev?.let { "%.4f m".format(it) } ?: "—")
                 DetailRow("East", "%.4f m".format(en.first))
                 DetailRow("North", "%.4f m".format(en.second))
-                DetailRow("Ground elev", p.altitude?.let { "%.4f m".format(it - p.antennaHeight) } ?: "—")
-                DetailRow("Measured H", p.altitude?.let { "%.4f m".format(it) } ?: "—")
                 DetailRow("Antenna h", "%.3f m".format(p.antennaHeight))
                 DetailRow("Solution", p.quality.label)
                 DetailRow("Satellites", "${p.satellitesUsed} used / ${p.satellitesTracked} tracked")

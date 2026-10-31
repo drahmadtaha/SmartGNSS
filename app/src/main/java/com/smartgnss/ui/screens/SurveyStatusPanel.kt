@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
@@ -56,10 +57,10 @@ fun SurveyStatusPanel(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column {
-            // --- Solution header: quality · H/V rms · sats · age ---------------
+            // --- Compact solution header: quality + TILT, then H/V (one line) --
             Row(
                 Modifier.fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Pill(if (connected) fix.quality.label else "No receiver", color)
@@ -68,26 +69,24 @@ fun SurveyStatusPanel(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                     Pill("TILT", SurveyColors.fixedGreen)
                 }
                 Spacer(Modifier.weight(1f))
-                HeaderStat("H", fix.hrms?.let { "%.4f".format(it) } ?: "—")
-                HeaderStat("V", fix.vrms?.let { "%.4f".format(it) } ?: "—")
-                HeaderStat("Age", fix.diffAgeSec?.let { "%.0f".format(it) } ?: "—")
-                HeaderStat("Sats", "${fix.satellitesUsed}/${fix.satellitesTracked}")
+                HeaderStat("H", fix.hrms?.let { "%.3f".format(it) } ?: "—")
+                HeaderStat("V", fix.vrms?.let { "%.3f".format(it) } ?: "—")
             }
 
             Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
             // --- Two-column geographic / grid block ---------------------------
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     CoordRow("B", dispLat?.let { dmsLat(it) } ?: "—")
                     CoordRow("L", dispLon?.let { dmsLon(it) } ?: "—")
-                    CoordRow("H", grid?.ellipsoidalHeight?.let { "%.4f".format(it) } ?: "—", "m")
+                    CoordRow("H", grid?.ellipsoidalHeight?.let { "%.3f".format(it) } ?: "—", "m")
                 }
-                Spacer(Modifier.padding(start = 8.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CoordRow("E", grid?.east?.let { "%.4f".format(it) } ?: "—", "m")
-                    CoordRow("N", grid?.north?.let { "%.4f".format(it) } ?: "—", "m")
-                    CoordRow("Elev", grid?.orthometricHeight?.let { "%.4f".format(it) } ?: "—", "m")
+                Spacer(Modifier.padding(start = 6.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    CoordRow("E", grid?.east?.let { "%.3f".format(it) } ?: "—", "m")
+                    CoordRow("N", grid?.north?.let { "%.3f".format(it) } ?: "—", "m")
+                    CoordRow("Elev", grid?.orthometricHeight?.let { "%.3f".format(it) } ?: "—", "m")
                 }
             }
 
@@ -105,7 +104,7 @@ fun SurveyStatusPanel(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 
             Text(crs.name, style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 14.dp, bottom = 8.dp))
+                modifier = Modifier.padding(start = 14.dp, bottom = 8.dp, top = 2.dp))
         }
     }
 }
@@ -113,34 +112,34 @@ fun SurveyStatusPanel(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 @Composable
 private fun HeaderStat(label: String, value: String) {
     Row(verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(start = 10.dp)) {
+        modifier = Modifier.padding(start = 12.dp)) {
         Text("$label:", style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.labelLarge,
             fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold,
+            maxLines = 1, softWrap = false,
             modifier = Modifier.padding(start = 3.dp))
     }
 }
 
-/** One column line: small bold label (B/L/H/E/N/Elev) over a single-line value.
- *  Label sits above the value so long DMS strings get the full column width and
- *  never wrap. */
+/** One column line: fixed-width bold label (B/L/H/E/N/Elev) + single-line value
+ *  + unit, all on one row. Value font is sized so a full DMS string (incl. the
+ *  N/E hemisphere) fits a half-width column without clipping. */
 @Composable
 private fun CoordRow(label: String, value: String, unit: String? = null) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall,
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(label, style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary)
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(value, fontSize = 15.sp, fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1, softWrap = false,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Clip)
-            if (unit != null) Text(" $unit", style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 2.dp, start = 2.dp))
-        }
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.width(30.dp))
+        Text(value, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1, softWrap = false,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Visible)
+        if (unit != null) Text(" $unit", style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 1.dp, start = 2.dp))
     }
 }
 
@@ -148,11 +147,12 @@ private fun CoordRow(label: String, value: String, unit: String? = null) {
 private fun LabelValueRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1, softWrap = false)
         Spacer(Modifier.weight(1f))
         Text(value, fontFamily = FontFamily.Monospace,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold)
+            fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+            maxLines = 1, softWrap = false)
     }
 }
 

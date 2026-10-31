@@ -2,11 +2,19 @@ package com.smartgnss.ui.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,7 +39,7 @@ fun SkyPlotScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     val fix by vm.fix.collectAsState()
     val sats = fix.satellitesInView
 
-    Column(modifier.fillMaxSize().padding(16.dp),
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
 
         SurveyStatusPanel(vm)
@@ -80,22 +88,81 @@ fun SkyPlotScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        SectionHeader("Signal (red low · green strong)")
-        SnrLegend(sats)
+        SectionHeader("By constellation")
+        ConstellationSummary(sats)
+
+        SectionHeader("Satellites (${sats.size})")
+        SatelliteTable(sats)
     }
 }
 
+/** Per-constellation counts: in view and tracked (SNR > 0). */
 @Composable
-private fun SnrLegend(sats: List<Satellite>) {
-    val byConst = sats.groupBy { it.constellation }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        byConst.forEach { (name, list) ->
-            val tracked = list.count { (it.snr ?: 0) > 0 }
-            Text("$name: ${list.size} in view, $tracked tracked",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun ConstellationSummary(sats: List<Satellite>) {
+    val byConst = sats.groupBy { it.constellation }.toSortedMap()
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("System", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("in view / tracked / avg SNR", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            byConst.forEach { (name, list) ->
+                val tracked = list.filter { (it.snr ?: 0) > 0 }
+                val avg = if (tracked.isNotEmpty()) tracked.mapNotNull { it.snr }.average() else 0.0
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(name, style = MaterialTheme.typography.bodyMedium)
+                    Text("${list.size} / ${tracked.size} / ${"%.0f".format(avg)} dB",
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodyMedium)
+                }
+            }
         }
     }
+}
+
+/** Full satellite table: system · PRN · elevation · azimuth · SNR bar. */
+@Composable
+private fun SatelliteTable(sats: List<Satellite>) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(Modifier.fillMaxWidth()) {
+                Text("Sat", Modifier.width(70.dp), style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("El", Modifier.width(44.dp), style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Az", Modifier.width(52.dp), style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("SNR", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            sats.sortedWith(compareBy({ it.constellation }, { it.prn })).forEach { sat ->
+                Row(Modifier.fillMaxWidth(),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text("${constShort(sat.constellation)}${sat.prn}", Modifier.width(70.dp),
+                        fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                    Text("${sat.elevation ?: "-"}°", Modifier.width(44.dp),
+                        fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                    Text("${sat.azimuth ?: "-"}°", Modifier.width(52.dp),
+                        fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                    // SNR bar
+                    Box(Modifier.weight(1f).height(10.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)) {
+                        val frac = ((sat.snr ?: 0).coerceIn(0, 50)) / 50f
+                        Box(Modifier.fillMaxWidth(frac).height(10.dp).background(snrColor(sat.snr)))
+                    }
+                    Text("  ${sat.snr ?: 0}", Modifier.width(34.dp),
+                        fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+private fun constShort(c: String): String = when (c) {
+    "GPS" -> "G"; "GLONASS" -> "R"; "Galileo" -> "E"; "BeiDou" -> "C"
+    "QZSS" -> "J"; "NavIC" -> "I"; else -> "?"
 }
 
 private fun snrColor(snr: Int?): Color = when {

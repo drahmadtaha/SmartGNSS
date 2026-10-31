@@ -111,7 +111,25 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         com.smartgnss.core.device.DeviceModel.fromName(settings.loadDeviceModel()).phaseCenter
     )
     val phaseCenterOffset = _phaseCenterOffset.asStateFlow()
-    fun setPhaseCenterOffset(h: Double) { _phaseCenterOffset.value = h; settings.savePhaseCenter(h) }
+
+    /** True when the phase-centre value came from the receiver's own
+     *  AT+PHASECENTEROFFSET reply (authoritative), not a model default or a
+     *  manual entry. */
+    private val _phaseCenterFromDevice = MutableStateFlow(false)
+    val phaseCenterFromDevice = _phaseCenterFromDevice.asStateFlow()
+
+    /** User/manual phase-centre override (clears the device-reported flag). */
+    fun setPhaseCenterOffset(h: Double) {
+        _phaseCenterOffset.value = h; settings.savePhaseCenter(h)
+        _phaseCenterFromDevice.value = false
+    }
+
+    /** Apply the receiver's reported phase centre (mm → m); it wins over the
+     *  per-model default. */
+    private fun setPhaseCenterFromDevice(meters: Double) {
+        _phaseCenterOffset.value = meters; settings.savePhaseCenter(meters)
+        _phaseCenterFromDevice.value = true
+    }
 
     /** Total vertical offset from the ground mark to the antenna phase centre. */
     fun effectiveAntennaHeight(): Double = _antennaHeight.value + _phaseCenterOffset.value
@@ -123,8 +141,54 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     val deviceModel = _deviceModel.asStateFlow()
     fun setDeviceModel(m: com.smartgnss.core.device.DeviceModel) {
         _deviceModel.value = m; settings.saveDeviceModel(m.name)
-        // Each model has its own antenna phase-centre offset.
-        setPhaseCenterOffset(m.phaseCenter)
+        // Fall back to the model's nominal phase centre only while the receiver
+        // hasn't reported its own (the device value is authoritative).
+        if (!_phaseCenterFromDevice.value) {
+            _phaseCenterOffset.value = m.phaseCenter
+            settings.savePhaseCenter(m.phaseCenter)
+        }
+    }
+
+    /** True once the model was identified from the receiver's own AT+DTYPE reply
+     *  (not just the saved/manual selection). */
+    private val _modelAutoDetected = MutableStateFlow(false)
+    val modelAutoDetected = _modelAutoDetected.asStateFlow()
+
+    /** Firmware / serial string from the receiver's AT+VER reply, for display. */
+    private val _deviceInfo = MutableStateFlow<String?>(null)
+    val deviceInfo = _deviceInfo.asStateFlow()
+
+    // Scans the incoming stream for the receiver's +DTYPE= / +VER= replies and,
+    // when it recognises the model, selects it automatically (which also sets the
+    // correct antenna phase-centre offset).
+    private val devRespBuf = StringBuilder()
+    private fun detectDeviceModel(bytes: ByteArray) {
+        devRespBuf.append(String(bytes, Charsets.ISO_8859_1))
+        if (devRespBuf.length > 300) devRespBuf.delete(0, devRespBuf.length - 300)
+        val t = devRespBuf.toString()
+        val di = t.lastIndexOf("+DTYPE=")
+        if (di >= 0) {
+            val dtype = t.substring(di + 7).takeWhile { it != '\r' && it != '\n' && it != '*' && it != ',' }
+            com.smartgnss.core.device.DeviceModel.fromDtype(dtype)?.let { m ->
+                if (_deviceModel.value != m) setDeviceModel(m)
+                _modelAutoDetected.value = true
+            }
+        }
+        val vi = t.lastIndexOf("+VER=")
+        if (vi >= 0) {
+            val ver = t.substring(vi + 5).takeWhile { it != '\r' && it != '\n' && it != '*' }
+            if (ver.isNotBlank()) _deviceInfo.value = ver
+        }
+        // +PHASECENTEROFFSET=<mm> — the receiver's own antenna phase centre.
+        // X-Survey reads it as millimetres and multiplies by 0.001 → metres.
+        val pi = t.lastIndexOf("+PHASECENTEROFFSET=")
+        if (pi >= 0) {
+            val field = t.substring(pi + 19)
+                .takeWhile { it != '\r' && it != '\n' && it != '*' && it != ',' }
+            field.trim().toDoubleOrNull()?.let { mm ->
+                if (mm in 0.0..500.0) setPhaseCenterFromDevice(mm * 0.001)
+            }
+        }
     }
 
     /** Run the IMU tilt-calibration step (sent while the user performs the motion). */
@@ -276,18 +340,23 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
      *  Point-database screens store a consistent, correct mark. */
     fun recordPoint(name: String, code: String): com.smartgnss.core.survey.SurveyPoint? {
         val fix = _fix.value
+        // gridFor() already reduces to the ground mark (tilt-compensated when tilt
+        // is on) and gives BOTH heights, so the stored point carries the ground
+        // ellipsoidal height alongside lat/lon and the orthometric elevation.
+        val grid = gridFor(fix)
         return if (usingTiltPosition(fix)) {
-            val lat = fix.tiltCompLat; val lon = fix.tiltCompLon
-            val ellip = fix.tiltCompAltEllip
-            val sep = lat?.let { la -> lon?.let { lo -> _geoid.value.separation(la, lo) } } ?: fix.geoidSep
-            // Store orthometric MSL at the mark (ellipsoidal tip − geoid sep).
-            val ortho = if (ellip != null && sep != null) ellip - sep else ellip
             survey.record(
                 name, code, fix, effectiveAntennaHeight(), tiltMode = true,
-                lat = lat, lon = lon, altitudeMsl = ortho, tiltCompensated = true,
+                lat = fix.tiltCompLat, lon = fix.tiltCompLon,
+                altitudeMsl = grid?.orthometricHeight,
+                ellipsoidalHeight = grid?.ellipsoidalHeight,
+                tiltCompensated = true,
             )
         } else {
-            survey.record(name, code, fix, effectiveAntennaHeight(), _tiltMode.value)
+            survey.record(
+                name, code, fix, effectiveAntennaHeight(), _tiltMode.value,
+                ellipsoidalHeight = grid?.ellipsoidalHeight,
+            )
         }
     }
 
@@ -319,6 +388,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
                     extractGga(bytes)
                     appendRaw(bytes)
                     detectTiltState(bytes)
+                    detectDeviceModel(bytes)
                     parser.feed(bytes).forEach { _fix.value = it }
                 }
             }
@@ -328,6 +398,14 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
                 // and full position flow (the ICE app does this on connect too).
                 kotlinx.coroutines.delay(1200)
                 com.smartgnss.core.device.Um982.enableOutput().forEach { sendCommand(it) }
+                // Ask the receiver which model it is (+DTYPE) and its firmware
+                // (+VER) so the app auto-selects the model and its phase centre.
+                kotlinx.coroutines.delay(300)
+                sendCommand("AT+DTYPE=?")
+                sendCommand("AT+VER=?")
+                // Read the receiver's own antenna phase-centre offset (mm); it
+                // overrides the per-model default for the most accurate height.
+                sendCommand("AT+PHASECENTEROFFSET=?")
                 // Read the receiver's actual tilt state so we don't disable it.
                 kotlinx.coroutines.delay(300)
                 sendCommand("AT+TILT=?")

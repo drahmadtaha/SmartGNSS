@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.smartgnss.core.geo.CoordinateSystem
 import com.smartgnss.core.geo.GeoidModel
 import com.smartgnss.ui.ReceiverViewModel
+import com.smartgnss.ui.theme.SurveyColors
 import java.io.File
 
 /** Pick the working coordinate system and geoid model. */
@@ -57,6 +58,8 @@ fun SettingsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     ) {
         com.smartgnss.ui.theme.SectionHeader("Receiver model")
         val model by vm.deviceModel.collectAsState()
+        val autoDetected by vm.modelAutoDetected.collectAsState()
+        val devInfo by vm.deviceInfo.collectAsState()
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             com.smartgnss.core.device.DeviceModel.entries.forEach { m ->
                 if (m == model)
@@ -66,6 +69,19 @@ fun SettingsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                         modifier = Modifier.weight(1f)) { Text(m.label) }
             }
         }
+        val phaseFromDevice by vm.phaseCenterFromDevice.collectAsState()
+        val phaseVal by vm.phaseCenterOffset.collectAsState()
+        Text(
+            buildString {
+                append(if (autoDetected) "Auto-detected from receiver" else "Manual selection")
+                append(" · phase centre %.4f m".format(phaseVal))
+                append(if (phaseFromDevice) " (read from receiver)" else " (model default)")
+                if (devInfo != null) append("\nFirmware: $devInfo")
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = if (autoDetected) SurveyColors.fixedGreen
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         com.smartgnss.ui.theme.SectionHeader("Coordinate system")
         Card(Modifier.fillMaxWidth()) {

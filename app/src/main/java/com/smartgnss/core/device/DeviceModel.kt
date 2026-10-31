@@ -14,5 +14,17 @@ enum class DeviceModel(val label: String, val phaseCenter: Double) {
     companion object {
         fun fromName(name: String?): DeviceModel =
             entries.firstOrNull { it.name == name } ?: CUBE_RTK
+
+        /** Map the receiver's own AT+DTYPE reply (e.g. "CUBERTK", "M10") to a
+         *  model, so the app can auto-detect the connected device. Returns null
+         *  if the type string isn't recognised. */
+        fun fromDtype(dtype: String?): DeviceModel? {
+            val d = dtype?.trim()?.uppercase() ?: return null
+            return when {
+                d.contains("CUBE") -> CUBE_RTK
+                d.contains("M10") -> M10
+                else -> null
+            }
+        }
     }
 }
