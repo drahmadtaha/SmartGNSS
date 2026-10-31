@@ -54,6 +54,17 @@ data class GnssFix(
     val rollDeg: Double? = null,
     val tiltAngleDeg: Double? = null, // angle from vertical
     val tiltValid: Boolean = false,
+    // Projection (tilt-direction) azimuth, deg — what X-Survey shows as
+    // "Projection Angle". From the UM982 #SLANTAPA pole-attitude log.
+    val projectionAngleDeg: Double? = null,
+    // Tilt-compensated pole-tip position straight from #SLANTAPA (the receiver
+    // has already applied pole length + lean). Kept alongside the raw GGA
+    // antenna position so the survey layer can choose to use it when tilt is on.
+    val tiltCompLat: Double? = null,
+    val tiltCompLon: Double? = null,
+    val tiltCompAltEllip: Double? = null, // ellipsoidal height of the pole tip
+    // IMU convergence/init state from #SLANTSTATUSA ("initialized" = ready).
+    val tiltConverged: Boolean = false,
 ) {
     /** Total satellites tracked across all constellations currently in view. */
     val satellitesTracked: Int get() = satellitesInView.count { (it.snr ?: 0) > 0 }

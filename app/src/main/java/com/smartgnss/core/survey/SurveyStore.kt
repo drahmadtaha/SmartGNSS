@@ -29,6 +29,11 @@ data class SurveyPoint(
     val ageSec: Double?,
     val tiltAngleDeg: Double?,     // null if measured in normal (non-tilt) mode
     val headingDeg: Double?,
+    val projectionAngleDeg: Double? = null, // tilt-direction azimuth (X-Survey "Projection Angle")
+    // True when the stored position is the tilt-compensated ground point from
+    // #SLANTAPA (pole lean + length already removed by the receiver): the height
+    // is already at the mark, so no antenna offset is subtracted again.
+    val tiltCompensated: Boolean = false,
     val antennaHeight: Double,
     val timestampMs: Long,
 ) {
@@ -42,6 +47,8 @@ data class SurveyPoint(
         put("pdop", pdop ?: JSONObject.NULL); put("hdop", hdop ?: JSONObject.NULL)
         put("vdop", vdop ?: JSONObject.NULL); put("age", ageSec ?: JSONObject.NULL)
         put("tilt", tiltAngleDeg ?: JSONObject.NULL); put("hdg", headingDeg ?: JSONObject.NULL)
+        put("proj", projectionAngleDeg ?: JSONObject.NULL)
+        put("tcomp", tiltCompensated)
         put("ant", antennaHeight); put("ts", timestampMs)
     }
 
@@ -58,7 +65,8 @@ data class SurveyPoint(
             hrms = o.dOrNull("hrms"), vrms = o.dOrNull("vrms"),
             pdop = o.dOrNull("pdop"), hdop = o.dOrNull("hdop"), vdop = o.dOrNull("vdop"),
             ageSec = o.dOrNull("age"), tiltAngleDeg = o.dOrNull("tilt"),
-            headingDeg = o.dOrNull("hdg"),
+            headingDeg = o.dOrNull("hdg"), projectionAngleDeg = o.dOrNull("proj"),
+            tiltCompensated = o.optBoolean("tcomp", false),
             antennaHeight = o.optDouble("ant", 0.0), timestampMs = o.optLong("ts"),
         )
     }
@@ -83,18 +91,28 @@ class SurveyStore(private val context: Context) {
         _points.value = load(projectKey)
     }
 
+    /**
+     * Record a point. [lat]/[lon]/[altitudeMsl] are the final mark position the
+     * caller has already resolved (tilt-compensated ground point when tilt is on,
+     * else the GGA antenna position); [tiltCompensated] marks which so the height
+     * is not reduced by the antenna offset a second time.
+     */
     fun record(
         name: String,
         code: String,
         fix: GnssFix,
         antennaHeight: Double,
         tiltMode: Boolean,
+        lat: Double? = fix.latitude,
+        lon: Double? = fix.longitude,
+        altitudeMsl: Double? = fix.altitudeMsl,
+        tiltCompensated: Boolean = false,
     ): SurveyPoint? {
-        val lat = fix.latitude ?: return null
-        val lon = fix.longitude ?: return null
+        val la = lat ?: return null
+        val lo = lon ?: return null
         val p = SurveyPoint(
-            name = name, code = code, latitude = lat, longitude = lon,
-            altitude = fix.altitudeMsl, quality = fix.quality,
+            name = name, code = code, latitude = la, longitude = lo,
+            altitude = altitudeMsl, quality = fix.quality,
             satellitesUsed = fix.satellitesUsed, satellitesTracked = fix.satellitesTracked,
             hrms = fix.hrms, vrms = fix.vrms,
             pdop = fix.pdop, hdop = fix.hdop, vdop = fix.vdop,
@@ -102,7 +120,10 @@ class SurveyStore(private val context: Context) {
             // Record the tilt angle whenever the receiver provides one (not only
             // when the mode toggle is on), so it's never silently dropped.
             tiltAngleDeg = fix.tiltAngleDeg,
-            headingDeg = fix.headingDeg, antennaHeight = antennaHeight,
+            headingDeg = fix.headingDeg,
+            projectionAngleDeg = fix.projectionAngleDeg,
+            tiltCompensated = tiltCompensated,
+            antennaHeight = antennaHeight,
             timestampMs = System.currentTimeMillis(),
         )
         _points.value = _points.value + p
@@ -175,14 +196,17 @@ class SurveyStore(private val context: Context) {
 
     private val dtFmt get() = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
 
-    /** Ground orthometric elevation (measured MSL − antenna height). */
-    private fun ground(p: SurveyPoint): Double? = p.altitude?.minus(p.antennaHeight)
+    /** Ground orthometric elevation at the mark. Tilt-compensated points are
+     *  already at the ground, so the antenna offset is subtracted only for
+     *  normal (vertical-pole) points. */
+    private fun ground(p: SurveyPoint): Double? =
+        if (p.tiltCompensated) p.altitude else p.altitude?.minus(p.antennaHeight)
 
     /** Full-attribute CSV; [project] supplies grid East/North per point. */
     fun toCsv(project: (SurveyPoint) -> Pair<Double, Double>?): String = buildString {
         appendLine(
             "name,code,date_time,latitude,longitude,east,north,ortho_h,ant_height," +
-                "quality,sats_used,sats_tracked,hrms,vrms,pdop,hdop,vdop,age_s,tilt_deg,heading_deg"
+                "quality,sats_used,sats_tracked,hrms,vrms,pdop,hdop,vdop,age_s,tilt_deg,projection_deg,heading_deg"
         )
         _points.value.forEach { p ->
             val en = project(p)
@@ -200,6 +224,7 @@ class SurveyStore(private val context: Context) {
                 append(p.pdop ?: "").append(',').append(p.hdop ?: "").append(',').append(p.vdop ?: "").append(',')
                 append(p.ageSec ?: "").append(',')
                 append(p.tiltAngleDeg?.let { "%.1f".format(it) } ?: "").append(',')
+                append(p.projectionAngleDeg?.let { "%.1f".format(it) } ?: "").append(',')
                 append(p.headingDeg?.let { "%.1f".format(it) } ?: "")
             })
         }

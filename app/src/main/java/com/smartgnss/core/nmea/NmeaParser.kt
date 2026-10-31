@@ -33,13 +33,23 @@ class NmeaParser {
                 }
             } else {
                 lineBuf.append(c)
-                if (lineBuf.length > 200) lineBuf.setLength(0) // guard against junk
+                // Unicore '#' logs (e.g. #SLANTAPA) run ~160 chars — allow headroom.
+                if (lineBuf.length > 300) lineBuf.setLength(0) // guard against junk
             }
         }
         return out
     }
 
     private fun parseLine(raw: String): GnssFix? {
+        // Unicore proprietary '#' logs (CRC32, not NMEA XOR) carry the IMU tilt.
+        if (raw.startsWith("#")) {
+            val changed = when {
+                raw.startsWith("#SLANTAPA") -> parseSlantApa(raw)
+                raw.startsWith("#SLANTSTATUSA") -> parseSlantStatus(raw)
+                else -> false
+            }
+            return if (changed) fix else null
+        }
         if (!raw.startsWith("$") || !checksumOk(raw)) return null
         val body = raw.substring(1, raw.indexOf('*').let { if (it < 0) raw.length else it })
         val f = body.split(',')
@@ -130,6 +140,61 @@ class NmeaParser {
             tiltValid = tiltDeg != null,
             headingDeg = hdg ?: fix.headingDeg,
         )
+        return true
+    }
+
+    /**
+     * #SLANTAPA — UM982 pole-attitude / tilt-compensation log (this is what
+     * ICE's own apps and X-Survey read for tilt; it is NOT an NMEA '$' sentence).
+     *
+     *   #SLANTAPA,<header…>;a,b,week,ms,lat,lon,hgt,sdLat,sdLon,sdHgt,
+     *             tilt,projAngle,…*<crc32>
+     *
+     * The body after ';' holds (0-based): [4]=lat [5]=lon [6]=ellipsoidal hgt
+     * of the pole tip, [7..9]=std devs, [10]=tilt angle (deg from vertical),
+     * [11]=projection angle (azimuth of the lean, deg). The position is already
+     * tilt- and pole-length-compensated by the receiver.
+     */
+    private fun parseSlantApa(raw: String): Boolean {
+        val semi = raw.indexOf(';')
+        if (semi < 0) return false
+        val star = raw.indexOf('*', semi)
+        val dataStr = raw.substring(semi + 1, if (star < 0) raw.length else star)
+        val d = dataStr.split(',')
+        if (d.size < 12) return false
+        val tilt = d[10].toDoubleOrNull()
+        val proj = d[11].toDoubleOrNull()
+        val lat = d[4].toDoubleOrNull()
+        val lon = d[5].toDoubleOrNull()
+        val hgt = d[6].toDoubleOrNull()
+        if (tilt == null) return false
+        fix = fix.copy(
+            tiltAngleDeg = tilt,
+            tiltValid = true,
+            projectionAngleDeg = proj ?: fix.projectionAngleDeg,
+            tiltCompLat = lat ?: fix.tiltCompLat,
+            tiltCompLon = lon ?: fix.tiltCompLon,
+            tiltCompAltEllip = hgt ?: fix.tiltCompAltEllip,
+        )
+        return true
+    }
+
+    /**
+     * #SLANTSTATUSA — IMU convergence/initialisation state. The body after ';'
+     * begins with a word: "CONVERGENCE" while still initialising, and reports
+     * "INITIALIZED"/"OK" once ready for tilt survey. We treat anything that is
+     * not plain CONVERGENCE as converged/ready.
+     */
+    private fun parseSlantStatus(raw: String): Boolean {
+        val semi = raw.indexOf(';')
+        if (semi < 0) return false
+        val star = raw.indexOf('*', semi)
+        val body = raw.substring(semi + 1, if (star < 0) raw.length else star)
+        val word = body.substringBefore(',').trim().uppercase()
+        val converged = word.isNotEmpty() &&
+            word != "CONVERGENCE" && word != "INITIALIZING" && word != "NONE"
+        if (converged == fix.tiltConverged) return false
+        fix = fix.copy(tiltConverged = converged)
         return true
     }
 

@@ -117,8 +117,7 @@ fun PointDatabaseScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             Button(
                 onClick = {
                     vm.beepClick()
-                    val p = vm.survey.record("P${points.size + 1}", "", fix,
-                        vm.effectiveAntennaHeight(), vm.tiltMode.value)
+                    val p = vm.recordPoint("P${points.size + 1}", "")
                     if (p != null) { vm.beepMeasure(); Toast.makeText(context, "Added ${p.name}", Toast.LENGTH_SHORT).show() }
                     else Toast.makeText(context, "No position fix", Toast.LENGTH_SHORT).show()
                 },

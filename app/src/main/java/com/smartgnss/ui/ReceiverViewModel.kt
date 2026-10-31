@@ -230,8 +230,28 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     val stakeTarget = _stakeTarget.asStateFlow()
     fun setStakeTarget(t: StakeTarget?) { _stakeTarget.value = t }
 
-    /** Project the current fix into the selected grid, with both heights. */
+    /** True when tilt is on AND the receiver is supplying a #SLANTAPA solution,
+     *  so measurements use the tilt-compensated ground point instead of the
+     *  GGA antenna position. */
+    fun usingTiltPosition(fix: GnssFix): Boolean =
+        _tiltMode.value && fix.tiltValid &&
+            fix.tiltCompLat != null && fix.tiltCompLon != null
+
+    /** Project the current fix into the selected grid, with both heights.
+     *  When tilt is active, the #SLANTAPA pole-tip position (already lean- and
+     *  pole-length-compensated) is used, so E/N/H land on the ground mark. */
     fun gridFor(fix: GnssFix): GridResult? {
+        if (usingTiltPosition(fix)) {
+            val lat = fix.tiltCompLat ?: return null
+            val lon = fix.tiltCompLon ?: return null
+            // #SLANTAPA height is ellipsoidal at the pole tip (the ground mark).
+            val groundEllip = fix.tiltCompAltEllip
+                ?: ((fix.altitudeMsl ?: 0.0) + (fix.geoidSep ?: 0.0))
+            val (e, n) = _crs.value.toGrid(lat, lon, groundEllip)
+            val sep = _geoid.value.separation(lat, lon) ?: fix.geoidSep
+            val ortho = if (sep != null) groundEllip - sep else null
+            return GridResult(e, n, groundEllip, ortho)
+        }
         val lat = fix.latitude ?: return null
         val lon = fix.longitude ?: return null
         val hEllipsoidal = (fix.altitudeMsl ?: 0.0) + (fix.geoidSep ?: 0.0)
@@ -243,6 +263,26 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
         val groundEllip = hEllipsoidal - antH
         val ortho = if (sep != null) hEllipsoidal - sep - antH else null
         return GridResult(e, n, groundEllip, ortho)
+    }
+
+    /** Record a point from the live fix, resolving the tilt-compensated ground
+     *  position when tilt is active. Centralised here so both the Survey and
+     *  Point-database screens store a consistent, correct mark. */
+    fun recordPoint(name: String, code: String): com.smartgnss.core.survey.SurveyPoint? {
+        val fix = _fix.value
+        return if (usingTiltPosition(fix)) {
+            val lat = fix.tiltCompLat; val lon = fix.tiltCompLon
+            val ellip = fix.tiltCompAltEllip
+            val sep = lat?.let { la -> lon?.let { lo -> _geoid.value.separation(la, lo) } } ?: fix.geoidSep
+            // Store orthometric MSL at the mark (ellipsoidal tip − geoid sep).
+            val ortho = if (ellip != null && sep != null) ellip - sep else ellip
+            survey.record(
+                name, code, fix, effectiveAntennaHeight(), tiltMode = true,
+                lat = lat, lon = lon, altitudeMsl = ortho, tiltCompensated = true,
+            )
+        } else {
+            survey.record(name, code, fix, effectiveAntennaHeight(), _tiltMode.value)
+        }
     }
 
     fun fetchMountPoints(host: String, port: Int, user: String, pass: String) {

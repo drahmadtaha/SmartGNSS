@@ -2,17 +2,21 @@ package com.smartgnss.ui.screens
 
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -33,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -95,10 +100,7 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        // Shared X-Survey solution panel (quality · N/E/H · HRMS/VRMS/PDOP).
-        SurveyStatusPanel(vm)
-
-        // Name / code / antenna
+        // Name / code / antenna (X-Survey keeps these above the readout).
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(name, { name = it }, label = { Text("Name") }, modifier = Modifier.weight(1f))
             OutlinedTextField(code, { code = it }, label = { Text("Code") }, modifier = Modifier.weight(1f))
@@ -106,22 +108,43 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                 label = { Text("Ant (m)") }, modifier = Modifier.weight(1f))
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = {
-                    val p = vm.survey.record(name, code, fix, vm.effectiveAntennaHeight(), tilt)
-                    if (p != null) {
-                        vm.beepMeasure()
-                        name = nextName(name)
-                        Toast.makeText(context, "Recorded ${p.name}", Toast.LENGTH_SHORT).show()
-                    } else {
-                        vm.beepClick()
-                        Toast.makeText(context, "No position fix yet", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                enabled = fix.latitude != null,
-                modifier = Modifier.weight(1f),
-            ) { Text("Record point") }
+        // Shared X-Survey solution panel (B/L/H · E/N/Elev · tilt rows).
+        SurveyStatusPanel(vm)
+
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+
+            // Round "measure" button, X-Survey style.
+            val canMeasure = fix.latitude != null
+            androidx.compose.foundation.layout.Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(
+                        if (canMeasure) SurveyColors.fixedGreen
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    )
+                    .clickable(enabled = canMeasure) {
+                        val p = vm.recordPoint(name, code)
+                        if (p != null) {
+                            vm.beepMeasure()
+                            name = nextName(name)
+                            Toast.makeText(context, "Recorded ${p.name}", Toast.LENGTH_SHORT).show()
+                        } else {
+                            vm.beepClick()
+                            Toast.makeText(context, "No position fix yet", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+            ) {
+                Icon(Icons.Filled.GpsFixed,
+                    contentDescription = "Measure point",
+                    tint = androidx.compose.ui.graphics.Color.White)
+            }
+            Text("Measure", style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            Spacer(Modifier.weight(1f))
 
             androidx.compose.foundation.layout.Box {
                 OutlinedButton(
@@ -209,10 +232,10 @@ private fun TiltCalibrationDialog(vm: ReceiverViewModel, onClose: () -> Unit) {
                     com.smartgnss.ui.theme.StatTile("Tilt α",
                         alpha?.let { "%.1f°".format(it) } ?: "—", Modifier.weight(1f),
                         accent = if (ready) SurveyColors.fixedGreen else null)
+                    com.smartgnss.ui.theme.StatTile("Proj. angle",
+                        fix.projectionAngleDeg?.let { "%.0f°".format(it) } ?: "—", Modifier.weight(1f))
                     com.smartgnss.ui.theme.StatTile("Offset Δa",
                         deltaA?.let { "%.3f m".format(it) } ?: "—", Modifier.weight(1f))
-                    com.smartgnss.ui.theme.StatTile("h_GNSS",
-                        "%.3f m".format(poleLen), Modifier.weight(1f))
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -223,10 +246,16 @@ private fun TiltCalibrationDialog(vm: ReceiverViewModel, onClose: () -> Unit) {
                 }
 
                 Text(
-                    if (ready) "IMU aligned — tilt is live. You can measure while tilted."
-                    else "Status: reading tilt… If it stays blank, enable + calibrate tilt in " +
-                        "the ICE app, then connect here (this screen only reads tilt, it won't " +
-                        "turn it off).",
+                    when {
+                        ready && fix.tiltConverged ->
+                            "IMU converged — tilt is live. You can measure while tilted."
+                        ready ->
+                            "Tilt is live (IMU still converging — rotate/walk a few metres to finish)."
+                        else ->
+                            "Status: reading tilt… If it stays blank, enable + calibrate tilt in " +
+                            "the ICE app, then connect here (this screen only reads tilt, it won't " +
+                            "turn it off)."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = if (ready) SurveyColors.fixedGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -301,6 +330,7 @@ internal fun PointDetailDialog(p: SurveyPoint, en: Pair<Double, Double>, onClose
                         "${p.vdop?.let { "%.2f".format(it) } ?: "—"}")
                 DetailRow("Correction age", p.ageSec?.let { "%.1f s".format(it) } ?: "—")
                 DetailRow("Tilt", p.tiltAngleDeg?.let { "%.1f°".format(it) } ?: "normal")
+                DetailRow("Projection angle", p.projectionAngleDeg?.let { "%.1f°".format(it) } ?: "—")
                 DetailRow("Heading", p.headingDeg?.let { "%.1f°".format(it) } ?: "—")
             }
         },
