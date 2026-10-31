@@ -2,6 +2,7 @@ package com.smartgnss.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -94,7 +95,7 @@ fun DeviceInfoScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun InfoCard(content: @Composable Column.() -> Unit) {
+internal fun InfoCard(content: @Composable ColumnScope.() -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp),
             content = content)
