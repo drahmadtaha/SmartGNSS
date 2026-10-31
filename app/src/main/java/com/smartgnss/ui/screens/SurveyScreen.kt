@@ -215,12 +215,20 @@ private fun TiltCalibrationDialog(vm: ReceiverViewModel, onClose: () -> Unit) {
                         "%.3f m".format(poleLen), Modifier.weight(1f))
                 }
 
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { vm.beepClick(); vm.enableTiltOnReceiver() },
+                        modifier = Modifier.weight(1f)) { Text("Enable on receiver") }
+                    OutlinedButton(onClick = { vm.beepClick(); vm.disableTiltOnReceiver() },
+                        modifier = Modifier.weight(1f)) { Text("Disable") }
+                }
+
                 Text(
                     if (ready) "IMU aligned — tilt is live. You can measure while tilted."
-                    else "Status: aligning… (no tilt value yet). If it stays blank, the " +
-                        "receiver isn't sending tilt data — share a Data Terminal log.",
+                    else "Status: reading tilt… If it stays blank, enable + calibrate tilt in " +
+                        "the ICE app, then connect here (this screen only reads tilt, it won't " +
+                        "turn it off).",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (ready) SurveyColors.fixedGreen else MaterialTheme.colorScheme.error,
+                    color = if (ready) SurveyColors.fixedGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },

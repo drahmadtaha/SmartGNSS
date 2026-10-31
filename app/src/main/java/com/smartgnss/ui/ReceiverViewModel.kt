@@ -199,12 +199,22 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     private val _tiltMode = MutableStateFlow(false)
     val tiltMode = _tiltMode.asStateFlow()
 
-    /** Toggle tilt and send AT+TILT with the current pole length (mm). */
-    fun setTiltMode(on: Boolean) {
-        _tiltMode.value = on
+    /** Show/use tilt in the app. This does NOT change the receiver's tilt state —
+     *  tilt is enabled & calibrated on the device (ICE app / explicit button
+     *  below), and SmartGNSS only reads the tilt data. This prevents the toggle
+     *  from accidentally disabling a calibrated tilt. */
+    fun setTiltMode(on: Boolean) { _tiltMode.value = on }
+
+    /** Explicitly enable tilt on the receiver (AT+TILT=1,<poleMm>). */
+    fun enableTiltOnReceiver() {
         val poleMm = (_antennaHeight.value * 1000).toInt().coerceIn(100, 6000)
-        com.smartgnss.core.device.Um982.tilt(on, poleMm).forEach { sendCommand(it) }
-        // Read back the state and device type so the responses show in the terminal.
+        sendCommand(com.smartgnss.core.device.Um982.tiltEnable(poleMm))
+        sendCommand("AT+TILT=?")
+    }
+
+    /** Explicitly disable tilt on the receiver. */
+    fun disableTiltOnReceiver() {
+        sendCommand(com.smartgnss.core.device.Um982.TILT_DISABLE)
         sendCommand("AT+TILT=?")
     }
 
