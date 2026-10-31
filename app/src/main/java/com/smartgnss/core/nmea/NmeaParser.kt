@@ -206,11 +206,16 @@ class NmeaParser {
         if (semi < 0) return false
         val star = raw.indexOf('*', semi)
         val body = raw.substring(semi + 1, if (star < 0) raw.length else star)
-        val word = body.substringBefore(',').trim().uppercase()
-        val converged = word.isNotEmpty() &&
-            word != "CONVERGENCE" && word != "INITIALIZING" && word != "NONE"
-        if (converged == fix.tiltConverged) return false
-        fix = fix.copy(tiltConverged = converged)
+        val f = body.split(',')
+        val word = f.getOrNull(0)?.trim()?.uppercase() ?: return false
+        // Field 2 is the convergence progress 0..100 (observed: MOVING…,16 while
+        // converging; CONVERGENCE…,100 once ready). Firmware marks readiness with
+        // the word "CONVERGENCE" and/or progress 100.
+        val progress = f.getOrNull(2)?.toIntOrNull()?.coerceIn(0, 100) ?: fix.tiltProgress
+        val converged = word == "CONVERGENCE" || progress >= 100
+        if (word == fix.tiltStatus && progress == fix.tiltProgress &&
+            converged == fix.tiltConverged) return false
+        fix = fix.copy(tiltStatus = word, tiltProgress = progress, tiltConverged = converged)
         return true
     }
 

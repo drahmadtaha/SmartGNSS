@@ -83,9 +83,7 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                 Card(
                     Modifier.fillMaxWidth().clickable {
                         vm.beepClick()
-                        val turningOn = !tilt
-                        vm.setTiltMode(turningOn)
-                        if (turningOn) showTiltCal = true
+                        showTiltCal = true   // open init dialog to enable/watch/disable
                     },
                     colors = CardDefaults.cardColors(
                         containerColor = if (tilt) SurveyColors.fixedGreen.copy(alpha = 0.14f)
@@ -98,9 +96,13 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
                             Text(if (tilt) "Tilt measurement — ON" else "Normal measurement",
                                 style = MaterialTheme.typography.titleSmall)
-                            Text(if (tilt)
-                                "Tilt ${fix.tiltAngleDeg?.let { "%.1f°".format(it) } ?: "—"} · tap to switch to normal"
-                            else "Pole must be vertical · tap to enable tilt",
+                            Text(when {
+                                tilt && fix.tiltValid ->
+                                    "Tilt ${fix.tiltAngleDeg?.let { "%.1f°".format(it) } ?: "—"} · live · tap for normal"
+                                tilt ->
+                                    "Converging ${fix.tiltProgress}% — walk to initialise · tap to open"
+                                else -> "Pole must be vertical · tap to enable tilt"
+                            },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -247,12 +249,33 @@ private fun TiltCalibrationDialog(vm: ReceiverViewModel, onClose: () -> Unit) {
         onDismissRequest = onClose,
         title = { Text("Tilt initialization") },
         text = {
+            val progress = fix.tiltProgress
+            val state = fix.tiltStatus
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Hold the pole vertical and steady, then gently rotate the receiver " +
-                    "and walk a few metres until the IMU aligns. Keep an RTK Fixed solution.",
+                Text("The IMU re-initialises every time you connect, so it must converge " +
+                    "here. Keep RTK Fixed, hold the pole roughly vertical, then WALK a few " +
+                    "metres and gently tilt the pole side to side until convergence reaches 100%.",
                     style = MaterialTheme.typography.bodySmall)
 
-                TiltDiagram(drawAngle, ready, Modifier.fillMaxWidth().height(150.dp))
+                TiltDiagram(drawAngle, ready, Modifier.fillMaxWidth().height(130.dp))
+
+                // Live convergence bar (from #SLANTSTATUSA) — X-Survey's init bar.
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("IMU convergence",
+                            style = MaterialTheme.typography.labelMedium)
+                        Spacer(Modifier.weight(1f))
+                        Text(if (ready) "READY" else "${state ?: "…"} $progress%",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (ready) SurveyColors.fixedGreen
+                                    else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { (if (ready) 100 else progress) / 100f },
+                        modifier = Modifier.fillMaxWidth().height(8.dp),
+                        color = if (ready) SurveyColors.fixedGreen else SurveyColors.brandBlue,
+                    )
+                }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     com.smartgnss.ui.theme.StatTile("Tilt α",
@@ -265,10 +288,12 @@ private fun TiltCalibrationDialog(vm: ReceiverViewModel, onClose: () -> Unit) {
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { vm.beepClick(); vm.enableTiltOnReceiver() },
-                        modifier = Modifier.weight(1f)) { Text("Enable on receiver") }
-                    OutlinedButton(onClick = { vm.beepClick(); vm.disableTiltOnReceiver() },
-                        modifier = Modifier.weight(1f)) { Text("Disable") }
+                    Button(onClick = {
+                        vm.beepClick(); vm.setTiltMode(true); vm.enableTiltOnReceiver()
+                    }, modifier = Modifier.weight(1f)) { Text("Enable / restart") }
+                    OutlinedButton(onClick = {
+                        vm.beepClick(); vm.setTiltMode(false); vm.disableTiltOnReceiver()
+                    }, modifier = Modifier.weight(1f)) { Text("Disable") }
                 }
 
                 Text(
@@ -276,11 +301,12 @@ private fun TiltCalibrationDialog(vm: ReceiverViewModel, onClose: () -> Unit) {
                         ready && fix.tiltConverged ->
                             "IMU converged — tilt is live. You can measure while tilted."
                         ready ->
-                            "Tilt is live (IMU still converging — rotate/walk a few metres to finish)."
+                            "Tilt is live. Keep moving until 100% for best accuracy."
+                        state == null ->
+                            "Press “Enable / restart”, then walk with the pole to start convergence."
                         else ->
-                            "Status: reading tilt… If it stays blank, enable + calibrate tilt in " +
-                            "the ICE app, then connect here (this screen only reads tilt, it won't " +
-                            "turn it off)."
+                            "Converging ($progress%) — keep walking and tilting the pole. " +
+                            "Tilt values appear once it reaches 100%."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = if (ready) SurveyColors.fixedGreen else MaterialTheme.colorScheme.onSurfaceVariant,

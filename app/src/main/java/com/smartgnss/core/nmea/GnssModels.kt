@@ -65,6 +65,12 @@ data class GnssFix(
     val tiltCompAltEllip: Double? = null, // ellipsoidal height of the pole tip
     // IMU convergence/init state from #SLANTSTATUSA ("initialized" = ready).
     val tiltConverged: Boolean = false,
+    // IMU state word from #SLANTSTATUSA (e.g. MOVING, STATIC, CONVERGENCE) and
+    // its convergence progress 0..100. The receiver only emits a valid tilt
+    // solution (tiltValid) once this reaches convergence; before then it streams
+    // an all-zero #SLANTAPA. Shown to the user so they can finish the init walk.
+    val tiltStatus: String? = null,
+    val tiltProgress: Int = 0,
 ) {
     /** Total satellites tracked across all constellations currently in view. */
     val satellitesTracked: Int get() = satellitesInView.count { (it.snr ?: 0) > 0 }
