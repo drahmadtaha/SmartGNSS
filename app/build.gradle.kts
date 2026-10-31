@@ -69,6 +69,9 @@ dependencies {
     // USB-serial support for wired receivers / data cables
     implementation("com.github.mik3y:usb-serial-for-android:3.7.0")
 
+    // Native offline/online tile map for stakeout (Google/OSM tiles, no WebView)
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
+
     // Kotlin coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
