@@ -92,8 +92,12 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                     ),
                 ) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.ScreenRotation, contentDescription = "Tilt",
-                            tint = if (tilt) SurveyColors.fixedGreen else MaterialTheme.colorScheme.onSurfaceVariant)
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(
+                                if (tilt) com.smartgnss.R.drawable.ic_tilt_on
+                                else com.smartgnss.R.drawable.ic_tilt_off),
+                            contentDescription = "Tilt",
+                            modifier = Modifier.size(34.dp))
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
                             Text(if (tilt) "Tilt measurement — ON" else "Normal measurement",
                                 style = MaterialTheme.typography.titleSmall)
@@ -113,8 +117,13 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                             checked = tilt,
                             onCheckedChange = { on ->
                                 vm.beepClick()
+                                // Only switch the app's measurement mode. Do NOT send
+                                // AT+TILT here — that re-initialises the IMU and wipes a
+                                // calibration already done (in RTK-Survey or earlier). If
+                                // tilt is already converged, turning the mode on just uses
+                                // it. (Re)initialising is an explicit choice in the dialog.
                                 vm.setTiltMode(on)
-                                if (on) { vm.enableTiltOnReceiver(); showTiltCal = true }
+                                if (on) showTiltCal = true
                             },
                             modifier = Modifier.padding(start = 8.dp),
                         )
@@ -265,9 +274,14 @@ private fun TiltCalibrationDialog(vm: ReceiverViewModel, onClose: () -> Unit) {
             val progress = fix.tiltProgress
             val state = fix.tiltStatus
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("The IMU re-initialises every time you connect, so it must converge " +
-                    "here. Keep RTK Fixed, hold the pole roughly vertical, then WALK a few " +
-                    "metres and gently tilt the pole side to side until convergence reaches 100%.",
+                Text(
+                    if (ready)
+                        "Tilt is converged and live — just measure. No need to restart."
+                    else
+                        "If you already calibrated tilt in RTK-Survey, it should show as live " +
+                        "below — don't restart. To initialise here, press “Enable / restart”, " +
+                        "keep RTK Fixed, then WALK a few metres and tilt the pole side to side " +
+                        "until convergence reaches 100%.",
                     style = MaterialTheme.typography.bodySmall)
 
                 TiltDiagram(drawAngle, ready, Modifier.fillMaxWidth().height(130.dp))
