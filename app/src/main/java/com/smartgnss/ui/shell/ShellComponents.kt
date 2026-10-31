@@ -22,6 +22,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
@@ -82,6 +86,7 @@ fun SolutionBar(vm: ReceiverViewModel) {
         else -> "—"
     }
 
+    var showDisc by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
@@ -97,12 +102,21 @@ fun SolutionBar(vm: ReceiverViewModel) {
             diameter = 34,
         )
         Spacer(Modifier.size(8.dp))
-        Column {
-            Text(
-                if (connected) fix.quality.label else "No receiver",
-                color = color, style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-            )
+        Column(
+            Modifier.clickable(enabled = connected) { showDisc = true }
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (connected) fix.quality.label else "No receiver",
+                    color = color, style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (connected) {
+                    Spacer(Modifier.size(4.dp))
+                    Icon(Icons.Filled.Close, contentDescription = "Disconnect",
+                        tint = SurveyColors.noFixRed, modifier = Modifier.size(15.dp))
+                }
+            }
             Text(
                 "H ${fix.hrms?.let { "%.3f".format(it) } ?: "—"}  " +
                     "V ${fix.vrms?.let { "%.3f".format(it) } ?: "—"}",
@@ -131,6 +145,21 @@ fun SolutionBar(vm: ReceiverViewModel) {
             contentDescription = net.label,
             tint = if (online) SurveyColors.fixedGreen else SurveyColors.noFixRed,
             modifier = Modifier.size(18.dp),
+        )
+    }
+    if (showDisc) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDisc = false },
+            title = { Text("Disconnect receiver?") },
+            text = { Text("This closes the Bluetooth/serial link to the receiver.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { vm.disconnect(); showDisc = false }) { Text("Disconnect") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showDisc = false }) { Text("Cancel") }
+            },
         )
     }
 }

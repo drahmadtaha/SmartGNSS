@@ -60,7 +60,7 @@ fun SurveyScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
     val crs by vm.crs.collectAsState()
     val tilt by vm.tiltMode.collectAsState()
     // Start at the next free number so we never reuse an existing point name.
-    var name by remember { mutableStateOf(nextFreeName(vm.survey.points.value, "PT1")) }
+    var name by remember { mutableStateOf(nextFreeName(vm.survey.points.value, "1")) }
     var code by remember { mutableStateOf("") }
     // Antenna/pole height is persisted in the ViewModel so it survives navigation.
     var antH by remember { mutableStateOf("%.3f".format(vm.antennaHeight.value)) }
@@ -461,19 +461,17 @@ private fun nextName(name: String): String {
 }
 
 /**
- * Next unused point name: takes the prefix of [current] and returns prefix +
- * (highest existing number for that prefix + 1), skipping any name already in
- * [points]. So measuring never reuses a number even across sessions / the DB.
+ * Lowest unused point name with [current]'s prefix, counting up from [current]'s
+ * number. Opening the screen with "1" yields "1" when nothing is saved, then
+ * "2", "3", …; after recording "5" (now saved) it yields "6". Never reuses a
+ * name already in [points].
  */
 fun nextFreeName(points: List<SurveyPoint>, current: String): String {
     val m = Regex("^(.*?)(\\d+)$").find(current)
     val prefix = m?.groupValues?.get(1) ?: current
     val width = m?.groupValues?.get(2)?.length ?: 1
     val taken = points.map { it.name }.toHashSet()
-    val re = Regex("^${Regex.escape(prefix)}(\\d+)$")
-    var maxN = m?.groupValues?.get(2)?.toIntOrNull() ?: 0
-    points.forEach { p -> re.find(p.name)?.groupValues?.get(1)?.toIntOrNull()?.let { if (it >= maxN) maxN = it } }
-    var n = maxN + 1
+    var n = m?.groupValues?.get(2)?.toIntOrNull() ?: 1
     var candidate = "$prefix${n.toString().padStart(width, '0')}"
     while (taken.contains(candidate)) { n++; candidate = "$prefix${n.toString().padStart(width, '0')}" }
     return candidate

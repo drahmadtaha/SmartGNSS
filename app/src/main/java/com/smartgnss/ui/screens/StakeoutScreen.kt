@@ -241,8 +241,8 @@ fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                 }
             }
 
-            // --- Main view ------------------------------------------------
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            // --- Main view (clipped so the map can't draw over the panels) -
+            Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(10.dp))) {
                 if (!showMap) {
                     StakeCompass(azimuth, dist, onPoint, heading, Modifier.fillMaxSize())
                 } else {
@@ -281,7 +281,7 @@ fun StakeoutScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
                     modifier = Modifier.size(52.dp).clip(CircleShape)
                         .background(if (canMeasure) SurveyColors.fixedGreen else MaterialTheme.colorScheme.surfaceVariant)
                         .clickable(enabled = canMeasure) {
-                            val p = vm.recordPoint(nextFreeName(vm.survey.points.value, "PT1"), "")
+                            val p = vm.recordPoint(nextFreeName(vm.survey.points.value, "1"), "")
                             if (p != null) { vm.beepMeasure()
                                 Toast.makeText(context, "Recorded ${p.name}", Toast.LENGTH_SHORT).show()
                             } else vm.beepClick()
@@ -338,6 +338,7 @@ private fun StakeMapOsm(curLat: Double?, curLon: Double?, tLat: Double?, tLon: D
     val tMarker = remember { arrayOfNulls<Marker>(1) }
     val cMarker = remember { arrayOfNulls<Marker>(1) }
     val lineRef = remember { arrayOfNulls<Polyline>(1) }
+    val lastSource = remember { arrayOfNulls<MapSource>(1) }
 
     Box(modifier) {
         AndroidView(
@@ -359,7 +360,9 @@ private fun StakeMapOsm(curLat: Double?, curLon: Double?, tLat: Double?, tLon: D
                 }
             },
             update = { m ->
-                m.setTileSource(tileSourceFor(source))
+                // Only swap tiles when the source actually changes — calling this
+                // every recomposition reloads all tiles and makes the map flash.
+                if (lastSource[0] != source) { m.setTileSource(tileSourceFor(source)); lastSource[0] = source }
                 // Target flag
                 if (showMarkers && tLat != null && tLon != null) {
                     val mk = tMarker[0] ?: Marker(m).also {

@@ -80,6 +80,7 @@ import com.smartgnss.ui.screens.StatusScreen
 import com.smartgnss.ui.screens.DeviceInfoScreen
 import com.smartgnss.ui.screens.SurveyScreen
 import com.smartgnss.ui.shell.MenuEntry
+import com.smartgnss.ui.shell.SplashScreen
 import com.smartgnss.ui.shell.MenuGrid
 import com.smartgnss.ui.shell.PlaceholderScreen
 import com.smartgnss.ui.shell.SolutionBar
@@ -92,7 +93,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { SmartGnssTheme { Root(vm) } }
+        setContent {
+            SmartGnssTheme {
+                var showSplash by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(2400); showSplash = false
+                }
+                if (showSplash) SplashScreen { showSplash = false } else Root(vm)
+            }
+        }
     }
 
     override fun onResume() {

@@ -174,6 +174,7 @@ fun CoordinateSystemScreen(
                     k0 = k0.toDoubleOrNull() ?: 1.0,
                     falseEast = fe.toDoubleOrNull() ?: 0.0, falseNorth = fn.toDoubleOrNull() ?: 0.0,
                 )
+                vm.beepClick()
                 vm.setCrs(CoordinateSystem(def))
                 android.widget.Toast.makeText(
                     context, "Applied “${def.name}”", android.widget.Toast.LENGTH_SHORT
@@ -189,9 +190,9 @@ fun CoordinateSystemScreen(
                 Text("Current: ${geoid.label}", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { vm.setGeoid(GeoidModel.None) },
+                    OutlinedButton(onClick = { vm.beepClick(); vm.setGeoid(GeoidModel.None) },
                         modifier = Modifier.weight(1f)) { Text("None") }
-                    OutlinedButton(onClick = { gridPicker.launch(arrayOf("*/*")) },
+                    OutlinedButton(onClick = { vm.beepClick(); gridPicker.launch(arrayOf("*/*")) },
                         modifier = Modifier.weight(1f)) { Text("Load grid") }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

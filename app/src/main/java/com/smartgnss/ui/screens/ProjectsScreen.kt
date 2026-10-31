@@ -97,7 +97,7 @@ fun ProjectsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
         }
 
         ExtendedFloatingActionButton(
-            onClick = { newName = ""; showNew = true },
+            onClick = { vm.beepClick(); newName = ""; showNew = true },
             icon = { Icon(Icons.Filled.Add, contentDescription = null) },
             text = { Text("New project") },
             modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
@@ -120,7 +120,7 @@ fun ProjectsScreen(vm: ReceiverViewModel, modifier: Modifier = Modifier) {
             },
             confirmButton = {
                 TextButton(
-                    onClick = { if (vm.projects.create(newName, crs.name)) showNew = false },
+                    onClick = { vm.beepClick(); if (vm.projects.create(newName, crs.name)) showNew = false },
                     enabled = newName.isNotBlank(),
                 ) { Text("Create") }
             },

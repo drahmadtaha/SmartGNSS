@@ -437,6 +437,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     private val ggaBuffer = StringBuilder()
 
     fun connect(t: Transport) {
+        audio.click()
         disconnect()
         transport = t
         _linkLabel.value = t.description
@@ -473,6 +474,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun disconnect() {
+        if (transport != null) audio.click()   // click only when actually disconnecting
         stopNtrip()
         readJob?.cancel(); readJob = null
         transport?.close(); transport = null
@@ -484,6 +486,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startNtrip(config: NtripConfig) {
         if (!license.has(Feature.RTK_NTRIP)) return   // feature gate
+        audio.click()
         stopNtrip()
         _rtcmBytes.value = 0L
         _lastRtcmAt.value = 0L
@@ -544,6 +547,7 @@ class ReceiverViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun stopNtrip() {
+        if (ntrip != null) audio.click()
         ntripJob?.cancel(); ntripJob = null
         ntrip?.close(); ntrip = null
         _ntripState.value = NtripState.IDLE
